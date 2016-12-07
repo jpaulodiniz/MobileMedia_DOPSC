@@ -1,0 +1,59 @@
+delta dCapturePhoto {
+
+	//package lancs.mobilemedia.core.ui.controller
+
+	modifies lancs.mobilemedia.core.ui.controller.PhotoViewController {
+
+		adds import lancs.mobilemedia.core.ui.screens.CaptureScreen;
+
+		adds CaptureScreen cpVideoScreen = null;
+
+		adds public CaptureScreen getCpVideoScreen() {
+			return cpVideoScreen;
+		}
+
+		adds public void setCpVideoScreen(CaptureScreen cpVideoScreen) {
+			this.cpVideoScreen = cpVideoScreen;
+		}
+	}
+
+	//package lancs.mobilemedia.core.ui.screens
+
+	modifies lancs.mobilemedia.core.ui.screens.CaptureScreen {
+
+		adds public final static int CAPTUREPHOTO = 1;
+
+		adds private Command takephoto = new Command("Take photo", Command.EXIT, 1);
+
+		modifies initMenu() {
+			this.addCommand(takephoto);
+			original();
+		}
+
+		adds public byte[] takePicture() {
+			try {
+				Alert alert = new Alert("Error", "The mobile database is full", null, AlertType.INFO);
+				alert.setTimeout(5000);
+				display.setCurrent(alert);
+				byte[] imageArray = this.videoControl.getSnapshot(null);
+
+				return imageArray;
+
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+			return null;
+		}
+	}
+
+	modifies lancs.mobilemedia.core.ui.screens.MediaListScreen {
+
+		adds public static final Command capturePhotoCommand = new Command("Capture Photo", Command.ITEM, 1);
+
+		modifies initMenu() {
+			original();
+			if (typeOfScreen == SHOWPHOTO)
+				this.addCommand(capturePhotoCommand);
+		}
+	}
+}

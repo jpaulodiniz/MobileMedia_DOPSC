@@ -101,7 +101,7 @@ delta cBase {
 
 		public abstract class AbstractController implements CommandListener, ControllerInterface {
 
-			private MainUIMidlet midlet;
+			protected MainUIMidlet midlet; //scope changed in release 07
 
 			private AlbumData albumData;
 
@@ -328,8 +328,7 @@ delta cBase {
 			public boolean handleCommand(Command c) {
 
 				String label = c.getLabel();
-				System.out.println(this.getClass().getName() + "::handleCommand: " +
-					label);
+				System.out.println(this.getClass().getName() + "::handleCommand: " + label);
 
 				command = ( ControllerCommandInterface ) commands.get(label);
 
@@ -1201,11 +1200,11 @@ delta cBase {
 							storeName = album_label + albumNames[i];
 							infoStoreName = info_label + albumNames[i];
 
-							System.out.println("<* ImageAccessor.resetImageRecordStore() *> delete "
-								+ storeName);
+							System.out.println("<* ImageAccessor.resetImageRecordStore() *> delete " + storeName);
 
 							RecordStore.deleteRecordStore(storeName);
 							RecordStore.deleteRecordStore(infoStoreName);
+
 						}
 						catch(RecordStoreException e) {
 							System.out.println("No record store named " + storeName + " to delete.");
@@ -1238,8 +1237,7 @@ delta cBase {
 				return converter.getBytesFromMediaInfo(ii);
 			}
 
-			protected MediaData getMediaFromBytes(byte [] data) throws
-			InvalidArrayFormatException {
+			protected MediaData getMediaFromBytes(byte [] data) throws InvalidArrayFormatException {
 				MediaData iiObject = converter.getMediaInfoFromBytes(data);
 				return iiObject;
 			}
@@ -1564,6 +1562,32 @@ delta cBase {
 			public void setMediaInfoTable(Hashtable mediaInfoTable) {
 				this.mediaInfoTable = mediaInfoTable;
 			}
+
+			protected void removeRecords() {
+				String storeName = null;
+				String infoStoreName = null;
+
+				if (albumNames != null) {
+					for (int i = 0; i < albumNames.length; i++) {
+						try {
+							storeName = album_label + albumNames[i];
+							infoStoreName = info_label + albumNames[i];
+
+							System.out.println("<* ImageAccessor.resetVideoRecordStore() *> delete "+storeName);
+
+							RecordStore.deleteRecordStore(storeName);
+							RecordStore.deleteRecordStore(infoStoreName);
+
+						} catch (RecordStoreException e) {
+							System.out.println("No record store named " + storeName	+ " to delete.");
+							System.out.println("...or...No record store named "	+ infoStoreName + " to delete.");
+							System.out.println("Ignoring Exception: " + e);
+						}
+					}
+				} else {
+					System.out.println("ImageAccessor::resetVideoRecordStore: albumNames array was null. Nothing to delete.");
+				}
+			}
 		}
 	}
 
@@ -1576,6 +1600,7 @@ delta cBase {
 			private int foreignRecordId;
 			private String parentAlbumName;
 			private String mediaLabel;
+			private String typeMedia;
 
 			public MediaData(int foreignRecordId, String parentAlbumName, String mediaLabel) {
 				super();
@@ -1606,6 +1631,14 @@ delta cBase {
 
 			public void setMediaLabel(String mediaLabelParam) {
 				mediaLabel = mediaLabelParam;
+			}
+
+			public String getTypeMedia() {
+				return typeMedia;
+			}
+
+			public void setTypeMedia(String type) {
+				typeMedia = type;
 			}
 
 			public String getParentAlbumName() {
@@ -1889,8 +1922,7 @@ delta cBase {
 
 			public static final String ALBUMLIST_SCREEN = "AlbumListScreen";
 			public static final String NEWALBUM_SCREEN = "NewAlbumScreen";
-			public static final String CONFIRMDELETEALBUM_SCREEN =
-			"ConfirmDeleteAlbumScreen";
+			public static final String CONFIRMDELETEALBUM_SCREEN = "ConfirmDeleteAlbumScreen";
 
 			public static final String IMAGE_SCREEN = "ImageScreen";
 			public static final String IMAGELIST_SCREEN = "ImageListScreen";
@@ -1936,11 +1968,13 @@ delta cBase {
 						if(len + 1 >= bArray.length) {
 							bArray2 = new byte[bArray.length];
 
-							for(i = 0; i < len; i ++) bArray2[i] = bArray[i];
+							for(i = 0; i < len; i ++)
+								bArray2[i] = bArray[i];
 
 							bArray = new byte[bArray2.length + 500];
 
-							for(i = 0; i < len; i ++) bArray[i] = bArray2[i];
+							for(i = 0; i < len; i ++)
+								bArray[i] = bArray2[i];
 						}
 						bArray[len] = b[0];
 						len ++;
@@ -1982,8 +2016,6 @@ delta cBase {
 
 					Integer x = Integer.valueOf(fidString);
 					MediaData ii = new MediaData(x.intValue(), albumLabel, imageLabel);
-
-					fillMediaInfoFromBytes();
 
 					setMediaFavorite(ii, iiString, startIndex, endIndex, DELIMITER); //from FOP - TODO review
 

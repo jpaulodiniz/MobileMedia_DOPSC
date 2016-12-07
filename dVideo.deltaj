@@ -1,0 +1,383 @@
+delta dVideo {
+
+	//package lancs.mobilemedia.core.ui;
+
+	modifies lancs.mobilemedia.core.ui.MainUIMidlet {
+
+		adds import lancs.mobilemedia.core.ui.controller.AlbumController;
+		adds import lancs.mobilemedia.core.ui.controller.BaseController;
+		adds import lancs.mobilemedia.core.ui.controller.MediaListController;
+		adds import lancs.mobilemedia.core.ui.datamodel.AlbumData;
+		adds import lancs.mobilemedia.core.ui.datamodel.VideoAlbumData;
+		adds import lancs.mobilemedia.core.ui.screens.AlbumListScreen;
+
+		adds private BaseController videoRootController;
+		adds private AlbumData videoModel;
+
+		modifies startControllers() {
+			original();
+			this.videoModel = new VideoAlbumData();
+
+			AlbumListScreen albumVideo = new AlbumListScreen();
+			this.videoRootController = new BaseController(this, this.videoModel, albumVideo);
+
+			MediaListController videoListController = new MediaListController(this, this.videoModel, albumVideo);
+			videoListController.setNextController(this.videoRootController);
+
+			AlbumController albumVideoController = new AlbumController(this, this.videoModel, albumVideo);
+			albumVideoController.setNextController(videoListController);
+			albumVideo.setCommandListener(albumVideoController);
+		}
+
+		modifies initControllers() {
+			original();
+			this.videoRootController.init(this.videoModel);
+		}
+	}
+
+	//package lancs.mobilemedia.core.ui.controller
+
+	adds {
+		package lancs.mobilemedia.core.ui.controller;
+
+		import javax.microedition.lcdui.Alert;
+		import javax.microedition.lcdui.AlertType;
+		import javax.microedition.lcdui.Command;
+		import javax.microedition.lcdui.Display;
+		import javax.microedition.lcdui.List;
+		import javax.microedition.rms.RecordStoreFullException;
+		import java.util.HashMap;
+
+		import lancs.mobilemedia.core.ui.MainUIMidlet;
+		import lancs.mobilemedia.core.ui.datamodel.AlbumData;
+		import lancs.mobilemedia.core.ui.datamodel.MediaData;
+		import lancs.mobilemedia.core.ui.screens.AlbumListScreen;
+		import lancs.mobilemedia.core.ui.screens.PlayVideoScreen;
+		import lancs.mobilemedia.core.util.Constants;
+		import lancs.mobilemedia.lib.exceptions.ImageNotFoundException;
+		import lancs.mobilemedia.lib.exceptions.ImagePathNotValidException;
+		import lancs.mobilemedia.lib.exceptions.InvalidImageDataException;
+		import lancs.mobilemedia.lib.exceptions.PersistenceMechanismException;
+
+		public class PlayVideoController extends AbstractController {
+
+			private PlayVideoScreen pmscreen;
+
+			private String mediaName;
+
+			public PlayVideoController(MainUIMidlet midlet, AlbumData albumData, List albumListScreen, PlayVideoScreen pmscreen) {
+				super(midlet, albumData, albumListScreen);
+				this.pmscreen = pmscreen;
+			}
+
+			public void initCommandsMap() {
+				commands = new HashMap();
+				commands.put("Start", new PlayVideo());
+				commands.put("Stop", new StopVideo());
+			}
+
+			public boolean handleCommand(Command c) {
+				String label = c.getLabel();
+
+				System.out.println( "<* PlayVideoController.handleCommand() *> " + label);
+
+				command = (ControllerCommandInterface) commands.get(label);
+
+				if (command != null) {
+					return command.execute(this);
+				}
+				else if (label.equals("Back") || label.equals("Cancel")) {
+					return goToPreviousScreen();
+				}
+
+				return false;
+			}
+
+			protected boolean goToPreviousScreen() {
+				pmscreen.stopVideo();
+				((AlbumListScreen) getAlbumListScreen()).repaintListAlbum(getAlbumData().getAlbumNames());
+				setCurrentScreen( getAlbumListScreen() );
+				ScreenSingleton.getInstance().setCurrentScreenName(Constants.ALBUMLIST_SCREEN);
+				return true;
+			}
+
+			public void startVideo() {
+				pmscreen.startVideo();
+			}
+
+			public void stopVideo() {
+				pmscreen.stopVideo();
+			}
+
+			public String getMediaName() {
+				return mediaName;
+			}
+
+			public void setMediaName(String mediaName) {
+				this.mediaName = mediaName;
+			}
+		}
+	}
+
+	adds {
+		package lancs.mobilemedia.core.ui.controller;
+
+		public class PlayVideo implements ControllerCommandInterface {
+
+			public boolean execute(AbstractController controller) {
+				((PlayVideoController) controller).startVideo();
+				return true;
+			}
+		}
+	}
+
+	adds {
+		package lancs.mobilemedia.core.ui.controller;
+
+		public class StopVideo implements ControllerCommandInterface {
+
+			public boolean execute(AbstractController controller) {
+				((PlayVideoController) controller).stopVideo();
+				return true;
+			}
+		}
+	}
+
+	//package lancs.mobilemedia.core.ui.datamodel
+
+	adds {
+		package lancs.mobilemedia.core.ui.datamodel;
+
+		import java.io.ByteArrayInputStream;
+		import java.io.InputStream;
+
+		import lancs.mobilemedia.lib.exceptions.ImageNotFoundException;
+		import lancs.mobilemedia.lib.exceptions.PersistenceMechanismException;
+
+		public class VideoAlbumData extends AlbumData {
+
+			public VideoAlbumData() {
+				mediaAccessor = new VideoMediaAccessor();
+			}
+
+			public InputStream getVideoFromRecordStore(String recordStore, String musicName)
+					throws ImageNotFoundException, PersistenceMechanismException {
+
+				MediaData mediaInfo = null;
+				mediaInfo = mediaAccessor.getMediaInfo(musicName);
+				int mediaId = mediaInfo.getForeignRecordId();
+				String album = mediaInfo.getParentAlbumName();
+				byte[] musicData = mediaAccessor.loadMediaBytesFromRMS(album, mediaId);
+				return new ByteArrayInputStream(musicData);
+			}
+		}
+	}
+
+	adds {
+		package lancs.mobilemedia.core.ui.datamodel;
+
+		import java.io.IOException;
+		import java.io.InputStream;
+		import javax.microedition.rms.RecordStoreException;
+
+		import lancs.mobilemedia.core.util.MultiMediaUtil;
+		import lancs.mobilemedia.lib.exceptions.ImageNotFoundException;
+		import lancs.mobilemedia.lib.exceptions.ImagePathNotValidException;
+		import lancs.mobilemedia.lib.exceptions.InvalidArrayFormatException;
+		import lancs.mobilemedia.lib.exceptions.InvalidImageDataException;
+		import lancs.mobilemedia.lib.exceptions.InvalidImageFormatException;
+		import lancs.mobilemedia.lib.exceptions.PersistenceMechanismException;
+
+		public class VideoMediaAccessor extends MediaAccessor {
+
+			private MultiMediaUtil converter = new MultiMediaUtil();
+
+			public VideoMediaAccessor() {
+				super("vvp-","vvpi-","My Video Album");
+			}
+
+			protected byte [] getMediaArrayOfByte(String path)
+					throws ImagePathNotValidException, InvalidImageFormatException {
+				byte [] data1 = converter.readMediaAsByteArray(path);
+				return data1;
+			}
+
+			protected byte [] getByteFromMediaInfo(MediaData ii) throws InvalidImageDataException {
+				return converter.getBytesFromMediaInfo(ii);
+			}
+
+			protected MediaData getMediaFromBytes(byte [] data) throws InvalidArrayFormatException {
+				MediaData iiObject = converter.getMultiMediaInfoFromBytes(data);
+				return iiObject;
+			}
+
+			public void resetRecordStore() throws InvalidImageDataException, PersistenceMechanismException {
+				removeRecords();
+
+				MediaData media = null;
+				MediaData mmedi = null;
+				InputStream is = (InputStream) this.getClass().getResourceAsStream("/images/fish.mpg");
+				byte[] video = null;
+				try {
+					video = inputStreamToBytes(is);
+				} catch (IOException e1) {
+					e1.printStackTrace();
+				}
+				System.out.println("Vai adicionar os dados");
+				addVideoData("Fish", default_album_name, video);
+				loadMediaDataFromRMS(default_album_name);
+
+				try {
+					media = this.getMediaInfo("Fish");
+					mmedi = new MediaData(media.getForeignRecordId(), media.getParentAlbumName(), media.getMediaLabel());
+					mmedi.setTypeMedia("video/mpeg");
+					this.updateMediaInfo(media, mmedi);
+				} catch (ImageNotFoundException e) {
+					e.printStackTrace();
+				}
+			}
+
+			public void addVideoData(String videoname, String albumname, byte[] video)
+				throws InvalidImageDataException, PersistenceMechanismException {
+				try {
+					addMediaArrayOfBytes(videoname, albumname, video);
+				} catch (RecordStoreException e) {
+					throw new PersistenceMechanismException();
+				}
+			}
+
+			public byte[] inputStreamToBytes(InputStream inputStream) throws IOException {
+				String str=inputStream.toString();
+				return str.getBytes();
+			}
+		}
+	}
+
+	//package lancs.mobilemedia.core.ui.screens
+
+	modifies lancs.mobilemedia.core.ui.screens.MediaListScreen {
+
+		adds public static final int PLAYVIDEO = 3;
+		adds public static final Command playVideoCommand = new Command("Play Video", Command.ITEM, 1);
+
+		modifies initMenu() {
+			original();
+			if (typeOfScreen == PLAYVIDEO)
+				this.addCommand(playVideoCommand);
+		}
+	}
+
+	adds {
+		package lancs.mobilemedia.core.ui.screens;
+
+		import java.io.InputStream;
+		import javax.microedition.lcdui.Command;
+		import javax.microedition.lcdui.Display;
+		import javax.microedition.lcdui.Graphics;
+		import javax.microedition.lcdui.game.GameCanvas;
+		import javax.microedition.media.Manager;
+		import javax.microedition.media.Player;
+		import javax.microedition.media.control.VideoControl;
+
+		import lancs.mobilemedia.core.ui.MainUIMidlet;
+		import lancs.mobilemedia.core.ui.controller.AbstractController;
+
+		public class PlayVideoScreen extends GameCanvas {
+
+			  private Player player = null;
+			  private VideoControl videoControl = null;
+
+			  private Command start = new Command("Start", Command.EXIT, 1);
+			  private Command back = new Command("Back", Command.ITEM, 1);
+			  private Command stop = new Command("Stop", Command.ITEM, 1);
+
+			  private Display display = null;
+			  private boolean error = false;
+
+			  private int dy = 2;
+
+			  public void startVideo() {
+			    if(error) return;
+			    try {
+			      player.start();
+			    } catch(Exception e) {
+			    	e.printStackTrace();
+			    }
+			  }
+
+			  public void stopVideo() {
+			    try {
+			      if(player != null) player.stop();
+			    } catch(Exception e) {e.printStackTrace(); }
+			  }
+
+			  public PlayVideoScreen(MainUIMidlet midlet,InputStream storedVideo, String type, AbstractController controller) {
+
+			    super(false);
+			    display = Display.getDisplay(midlet);
+
+			    this.addCommand(start);
+			    this.addCommand(stop);
+			    this.addCommand(back);
+
+				addCopyVideoCommand(this);
+
+			    try {
+			    	player = Manager.createPlayer(storedVideo, type);
+			    	player.realize();
+
+			    	videoControl = (VideoControl)player.getControl("VideoControl");
+			    } catch (Exception e) {
+			      System.out.println("Error ao criar o player:");
+			      e.printStackTrace();
+			    }
+
+			    try {
+			    	this.setCommandListener(controller);
+			      	System.out.println("Crio os comandos e vai iniciar o display");
+			      	videoControl.initDisplayMode(VideoControl.USE_DIRECT_VIDEO, this);
+			    } catch(Exception e) {
+			    	System.out.println("Error criar or controler"+e.getMessage());
+			    }
+
+			    int halfCanvasWidth = this.getWidth();
+			    int halfCanvasHeight = this.getHeight();
+
+			    try {
+			    	videoControl.setDisplayFullScreen(false);
+			        videoControl.setDisplaySize(halfCanvasWidth-10, halfCanvasHeight-10);
+			        videoControl.setDisplayLocation(5, 5);
+			    } catch(Exception e) {
+			    	System.out.println("Error ao definir a tela");
+			      	e.printStackTrace();
+			    }
+			}
+
+			public void paint(Graphics g) {
+				g.setColor(0xffffff);
+				g.fillRect(0, 0, getWidth(), getHeight());
+				flushGraphics();
+			}
+
+			public void keyPressed(int keyCode) {
+				int gameAction = getGameAction(keyCode);
+			    int y = videoControl.getDisplayY();
+			    if(gameAction == UP) {
+			    	y -= dy;
+			    } else if(gameAction == DOWN) {
+			    	y += dy;
+			    }
+			    videoControl.setDisplayLocation(videoControl.getDisplayX(), y);
+			    repaint();
+			}
+
+			public void setVisibleVideo(){
+				display.setCurrent(this);
+				videoControl.setVisible(true);
+			}
+
+			protected void addCopyVideoCommand(PlayVideoScreen videoScreen) {
+			}
+		}
+	}
+}

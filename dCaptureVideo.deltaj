@@ -1,0 +1,157 @@
+delta dCaptureVideo {
+
+	//package lancs.mobilemedia.core.ui.controller
+
+	adds {
+		package lancs.mobilemedia.core.ui.controller;
+
+		import java.util.HashMap;
+
+		import javax.microedition.lcdui.Command;
+		import javax.microedition.lcdui.Display;
+		import javax.microedition.lcdui.List;
+
+		import lancs.mobilemedia.core.ui.MainUIMidlet;
+		import lancs.mobilemedia.core.ui.datamodel.AlbumData;
+		import lancs.mobilemedia.core.ui.screens.AddMediaToAlbum;
+		import lancs.mobilemedia.core.ui.screens.AlbumListScreen;
+		import lancs.mobilemedia.core.ui.screens.CaptureScreen;
+		import lancs.mobilemedia.core.util.Constants;
+		import lancs.mobilemedia.lib.exceptions.InvalidImageDataException;
+		import lancs.mobilemedia.lib.exceptions.PersistenceMechanismException;
+
+		public class VideoCaptureController extends AbstractController {
+
+			private CaptureScreen pmscreen;
+			private AddMediaToAlbum saveVideoToAlbum;
+
+			public VideoCaptureController(MainUIMidlet midlet, AlbumData albumData,
+					List albumListScreen, CaptureScreen pmscreen) {
+				super(midlet, albumData, albumListScreen);
+				this.pmscreen = pmscreen;
+			}
+
+			public void initCommandsMap() {
+				commands = new HashMap();
+			}
+
+			public boolean handleCommand(Command command) {
+				String label = command.getLabel();
+				System.out.println( "<* VideoCaptureController.handleCommand() *> " + label);
+
+				if (label.equals("Start")) {
+					pmscreen.startCapture();
+					return true;
+				} else if (label.equals("Stop")) {
+					pmscreen.pauseCapture();
+					saveVideoToAlbum = new AddMediaToAlbum("Save Video");
+					saveVideoToAlbum.setItemName("Capture video");
+					saveVideoToAlbum.setLabelPath("Save to Album:");
+					saveVideoToAlbum.setCommandListener(this);
+					saveVideoToAlbum.setCapturedMedia(pmscreen.getByteArrays());
+					Display.getDisplay(midlet).setCurrent(saveVideoToAlbum);
+					return true;
+				}
+				else if (label.equals("Save Item")) {
+					String videoname = ((AddMediaToAlbum) getCurrentScreen()).getItemName();
+					String albumname = ((AddMediaToAlbum) getCurrentScreen()).getPath();
+					try {
+						getAlbumData().addVideoData(videoname, albumname, saveVideoToAlbum.getCapturedMedia());
+					} catch (InvalidImageDataException e) {
+						e.printStackTrace();
+					} catch (PersistenceMechanismException e) {
+						e.printStackTrace();
+					}
+				} else if ((label.equals("Back"))||(label.equals("Cancel"))){
+					pmscreen.pauseCapture();
+					((AlbumListScreen) getAlbumListScreen()).repaintListAlbum(getAlbumData().getAlbumNames());
+					setCurrentScreen( getAlbumListScreen() );
+					ScreenSingleton.getInstance().setCurrentScreenName(Constants.ALBUMLIST_SCREEN);
+					return true;
+				}
+				return false;
+			}
+		}
+	}
+
+	//package lancs.mobilemedia.core.ui.datamodel
+
+	modifies lancs.mobilemedia.core.ui.datamodel.AlbumData {
+
+	adds public void addVideoData(String videoname, String albumname, byte[] video)
+			throws InvalidImageDataException, PersistenceMechanismException {
+		if (mediaAccessor instanceof VideoMediaAccessor)
+			((VideoMediaAccessor)mediaAccessor).addVideoData(videoname, albumname, video);
+		}
+	}
+
+	//package lancs.mobilemedia.core.ui.screens
+
+	modifies lancs.mobilemedia.core.ui.screens.AddMediaToAlbum {
+//TODO review because may be involved with SMS feature according with other implementations
+		adds import javax.microedition.lcdui.Image;
+
+		adds byte[] CapturedMedia = null;
+
+		adds public byte[] getCapturedMedia() {
+			return CapturedMedia;
+		}
+
+		adds public void setCapturedMedia(byte[] capturedMedia) {
+			CapturedMedia = capturedMedia;
+		}
+	}
+
+	modifies lancs.mobilemedia.core.ui.screens.CaptureScreen {
+
+		adds public final static int CAPTUREVIDEO = 2;
+
+		adds private Command start = new Command("Start", Command.EXIT, 1);
+		adds private Command stop = new Command("Stop", Command.ITEM, 1);
+
+		modifies initMenu() {
+			this.addCommand(start);
+			this.addCommand(stop);
+			original();
+		}
+
+		adds public void startCapture() {
+			try {
+				if (!recording) {
+					rControl = (RecordControl) capturePlayer.getControl("RecordControl");
+					if (rControl == null)
+						throw new Exception("No RecordControl found!");
+					byteOfArray = new ByteArrayOutputStream();
+					rControl.setRecordStream(byteOfArray);
+					rControl.startRecord();
+					recording = true;
+				}
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
+
+		adds public void pauseCapture() {
+			try {
+				if (recording) {
+					rControl.stopRecord();
+					rControl.commit();
+					recording = false;
+				}
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
+	}
+
+	modifies lancs.mobilemedia.core.ui.screens.MediaListScreen {
+
+		adds public static final Command captureVideoCommand = new Command("Capture Video", Command.ITEM, 1);
+
+		modifies initMenu() {
+			original();
+			if (typeOfScreen == PLAYVIDEO)
+				this.addCommand(captureVideoCommand);
+		}
+	}
+}

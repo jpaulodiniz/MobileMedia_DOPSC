@@ -175,14 +175,14 @@ delta dMusic {
 				mediaAccessor = new MusicMediaAccessor();
 			}
 
-			public InputStream getMusicFromRecordStore(String recordStore, String
-				musicName) throws ImageNotFoundException, PersistenceMechanismException {
+			public InputStream getMusicFromRecordStore(String recordStore, String musicName)
+					throws ImageNotFoundException, PersistenceMechanismException {
 
 				MediaData mediaInfo = null;
 				mediaInfo = mediaAccessor.getMediaInfo(musicName);
 				int mediaId = mediaInfo.getForeignRecordId();
 				String album = mediaInfo.getParentAlbumName();
-				byte [] musicData =(mediaAccessor).loadMediaBytesFromRMS(album, mediaId);
+				byte [] musicData = mediaAccessor.loadMediaBytesFromRMS(album, mediaId);
 				return new ByteArrayInputStream(musicData);
 			}
 		}
@@ -194,7 +194,7 @@ delta dMusic {
 		import javax.microedition.rms.RecordStore;
 		import javax.microedition.rms.RecordStoreException;
 
-		import lancs.mobilemedia.core.util.MusicMediaUtil;
+		import lancs.mobilemedia.core.util.MultiMediaUtil;
 		import lancs.mobilemedia.lib.exceptions.ImageNotFoundException;
 		import lancs.mobilemedia.lib.exceptions.ImagePathNotValidException;
 		import lancs.mobilemedia.lib.exceptions.InvalidArrayFormatException;
@@ -204,25 +204,23 @@ delta dMusic {
 
 		public class MusicMediaAccessor extends MediaAccessor {
 
-			private MusicMediaUtil converter = new MusicMediaUtil();
+			private MultiMediaUtil converter = new MultiMediaUtil();
 
 			public MusicMediaAccessor() {
 				super("mmp-", "mmpi-", "My Music Album");
 			}
 
-			protected byte [] getMediaArrayOfByte(String path) throws
-			ImagePathNotValidException, InvalidImageFormatException {
+			protected byte [] getMediaArrayOfByte(String path)
+					throws ImagePathNotValidException, InvalidImageFormatException {
 				byte [] data1 = converter.readMediaAsByteArray(path);
 				return data1;
 			}
 
-			protected byte [] getByteFromMediaInfo(MediaData ii) throws
-			InvalidImageDataException {
+			protected byte [] getByteFromMediaInfo(MediaData ii) throws InvalidImageDataException {
 				return converter.getBytesFromMediaInfo(ii);
 			}
 
-			protected MediaData getMediaFromBytes(byte [] data) throws
-			InvalidArrayFormatException {
+			protected MediaData getMediaFromBytes(byte [] data) throws InvalidArrayFormatException {
 				MediaData iiObject = converter.getMultiMediaInfoFromBytes(data);
 				return iiObject;
 			}
@@ -233,25 +231,20 @@ delta dMusic {
 				String infoStoreName = null;
 
 				if(albumNames != null) {
-					for(int i = 0;
-						i < albumNames.length;
-						i ++) {
+					for(int i = 0; i < albumNames.length; i ++) {
 						try {
 							storeName = album_label + albumNames[i];
 							infoStoreName = info_label + albumNames[i];
 
-							System.out.println("<* ImageAccessor.resetImageRecordStore() *> delete "
-								+ storeName);
+							System.out.println("<* ImageAccessor.resetImageRecordStore() *> delete " + storeName);
 
 							RecordStore.deleteRecordStore(storeName);
 							RecordStore.deleteRecordStore(infoStoreName);
 
 						}
 						catch(RecordStoreException e) {
-							System.out.println("No record store named " + storeName +
-								" to delete.");
-							System.out.println("...or...No record store named " + infoStoreName +
-								" to delete.");
+							System.out.println("No record store named " + storeName + " to delete.");
+							System.out.println("...or...No record store named " + infoStoreName + " to delete.");
 							System.out.println("Ignoring Exception: " + e);
 						}
 					}
@@ -319,7 +312,8 @@ delta dMusic {
 
 		modifies initMenu() {
 			original();
-			if (typeOfScreen == PLAYMUSIC) this.addCommand(playCommand);
+			if (typeOfScreen == PLAYMUSIC)
+				this.addCommand(playCommand);
 		}
 	}
 
@@ -448,54 +442,6 @@ delta dMusic {
 
 				protected void paint(Graphics arg0) {
 					//do nothing, according with MobileMedia_CC last version
-				}
-			}
-		}
-
-		//package lancs.mobilemedia.core.util
-
-		adds {
-			package lancs.mobilemedia.core.util;
-
-			import lancs.mobilemedia.core.ui.datamodel.MediaData;
-			import lancs.mobilemedia.core.ui.datamodel.MultiMediaData;
-			import lancs.mobilemedia.lib.exceptions.InvalidArrayFormatException;
-			import lancs.mobilemedia.lib.exceptions.InvalidImageDataException;
-
-			public class MusicMediaUtil extends MediaUtil {
-
-				public byte [] getBytesFromMediaInfo(MediaData ii) throws
-				InvalidImageDataException {
-					try {
-						byte [] mediadata = super.getBytesFromMediaInfo(ii);
-						if(ii instanceof MultiMediaData) {
-							String byteString = new String(mediadata);
-							byteString = byteString.concat(DELIMITER);
-
-							byteString = byteString.concat((( MultiMediaData ) ii).getTypeMedia());
-							return byteString.getBytes();
-						}
-						return mediadata;
-					}
-					catch(Exception e) {
-						throw new InvalidImageDataException("The provided data are not valid");
-					}
-				}
-
-				public MediaData getMultiMediaInfoFromBytes(byte [] bytes) throws
-				InvalidArrayFormatException {
-					MediaData mediadata = super.getMediaInfoFromBytes(bytes);
-					String iiString = new String(bytes);
-
-					int startIndex = endIndex + 1;
-					if(endIndex == iiString.length()) return mediadata;
-
-					endIndex = iiString.indexOf(DELIMITER, startIndex);
-
-					if(endIndex == - 1) endIndex = iiString.length();
-					String mediaType = iiString.substring(startIndex, endIndex);
-					MultiMediaData mmedi = new MultiMediaData(mediadata, mediaType);
-					return mmedi;
 				}
 			}
 		}
