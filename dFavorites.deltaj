@@ -1,0 +1,160 @@
+delta dFavorites {
+
+//package lancs.mobilemedia.core.ui.controller
+
+	modifies lancs.mobilemedia.core.ui.controller.BaseController {
+
+		adds public static final int SHOW_IMAGE_LIST_FAVORITES_MODE = 3;
+
+		modifies initCommandsMap() {
+			original();
+			commands.put("Set Favorite", new SetFavorite());
+			commands.put("View Favorites", new ViewFavorites());
+		}
+
+		modifies fillImageList(PhotoListScreen imageList, ImageData [] images, int
+			imageListMode) {
+
+			if(imageListMode == SHOW_IMAGE_LIST_FAVORITES_MODE) {
+				for(int i = 0;
+					i < images.length;
+					i ++) {
+					if(images[i] != null && images[i].isFavorite()) {
+						imageList.append(images[i].getImageLabel(), null);
+					}
+				}
+			}
+			else {
+				original(imageList, images, imageListMode);
+			}
+		}
+	}
+
+	adds {
+		package lancs.mobilemedia.core.ui.controller;
+
+		import javax.microedition.lcdui.Alert;
+		import javax.microedition.lcdui.AlertType;
+		import javax.microedition.lcdui.Display;
+
+		import lancs.mobilemedia.core.ui.datamodel.ImageData;
+		import lancs.mobilemedia.lib.exceptions.ImageNotFoundException;
+		import lancs.mobilemedia.lib.exceptions.NullAlbumDataReference;
+
+		public class SetFavorite implements ControllerCommandInterface {
+
+			public boolean execute(BaseController controller) {
+				String selectedImageName = controller.getSelectedImageName();
+				try {
+					ImageData image = controller.getModel().getImageInfo(selectedImageName);
+					image.toggleFavorite();
+					controller.updateImage(image);
+					System.out.println("<* BaseController.handleCommand() *> Image = " +
+						selectedImageName + "; Favorite = " + image.isFavorite());
+				}
+				catch(ImageNotFoundException e) {
+					Alert alert = new Alert("Error",
+						"The selected photo was not found in the mobile device", null,
+						AlertType.ERROR);
+					Display.getDisplay(controller.getMidlet()).setCurrent(alert,
+						Display.getDisplay(controller.getMidlet()).getCurrent());
+				}
+				catch(NullAlbumDataReference e) {
+					controller.createNewAlbumData();
+					Alert alert = new Alert("Error",
+						"The operation is not available. Try again later !", null,
+						AlertType.ERROR);
+					Display.getDisplay(controller.getMidlet()).setCurrent(alert,
+						Display.getDisplay(controller.getMidlet()).getCurrent());
+				}
+				return true;
+			}
+		}
+	}
+
+	adds {
+		package lancs.mobilemedia.core.ui.controller;
+
+		import lancs.mobilemedia.core.util.Constants;
+
+		public class ViewFavorites implements ControllerCommandInterface {
+
+			public boolean execute(BaseController controller) {
+				controller.showImageList(controller.getCurrentStoreName(),
+					BaseController.SHOW_IMAGE_LIST_FAVORITES_MODE);
+				controller.setCurrentScreenName(Constants.IMAGELIST_SCREEN);
+				return true;
+			}
+		}
+	}
+
+	//package lancs.mobilemedia.core.ui.datamodel
+
+	modifies lancs.mobilemedia.core.ui.datamodel.ImageData {
+
+		adds private boolean favorite = false;
+
+		adds public void toggleFavorite() {
+			favorite = ! favorite;
+		}
+
+		adds public boolean isFavorite() {
+			return favorite;
+		}
+
+		adds public void setFavorite(boolean favoriteParam) {
+			favorite = favoriteParam;
+		}
+	}
+
+	//package lancs.mobilemedia.core.ui.screens
+
+	modifies lancs.mobilemedia.core.ui.screens.PhotoListScreen {
+
+		adds public static final Command favoriteCommand = new
+		Command("Set Favorite", Command.ITEM, 1);
+		adds public static final Command viewFavoritesCommand = new
+		Command("View Favorites", Command.ITEM, 1);
+
+		modifies initMenu() {
+			original();
+			this.addCommand(favoriteCommand);
+			this.addCommand(viewFavoritesCommand);
+		}
+	}
+
+	//package lancs.mobilemedia.core.util
+
+	modifies lancs.mobilemedia.core.util.ImageUtil {
+
+		adds protected void setImageFavorite(ImageData ii, String iiString,
+				int startIndex, int endIndex, String delimiter) {
+
+			boolean favorite = false;
+
+			startIndex = endIndex + 1;
+			endIndex = iiString.indexOf(delimiter, startIndex);
+			if(endIndex == - 1) endIndex = iiString.length();
+
+			favorite =(iiString.substring(startIndex,
+					endIndex)).equalsIgnoreCase("true");
+			ii.setFavorite(favorite);
+		}
+
+		modifies retrieveImageByteString(ImageData ii) {
+
+			String byteString = original(ii);
+			byteString = byteString.concat(DELIMITER);
+
+			if (ii.isFavorite()) byteString = byteString.concat("true");
+			else byteString = byteString.concat("false");
+
+			return byteString;
+		}
+
+		adds protected void concatByteStringFavorite(ImageData ii, String
+			byteString, String delimiter) {
+
+		}
+	}
+}

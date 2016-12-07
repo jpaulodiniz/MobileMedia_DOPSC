@@ -1571,6 +1571,7 @@ delta cBase {
 				System.out.println("PhotoViewScreen::paint(): Image object was null.");
 
 				g.drawImage(image, 0, 0, Graphics.TOP | Graphics.LEFT);
+
 			}
 		}
 	}
