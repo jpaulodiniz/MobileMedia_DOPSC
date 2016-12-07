@@ -6,7 +6,7 @@ delta dCopyPhotoAndSMS {
 
 		adds import lancs.mobilemedia.core.ui.screens.PhotoViewScreen;
 
-		modifies finishCopyCommand(AbstractController controller, AddPhotoToAlbum copyPhotoToAlbum) {
+		modifies finishCopyCommand(AbstractController controller, AddMediaToAlbum copyPhotoToAlbum) {
 			//copy from sms
 			if (( (PhotoViewScreen) controller.getCurrentScreen() ).isFromSMS()) {
 				copyPhotoToAlbum.setImage(( (PhotoViewScreen) controller.getCurrentScreen() ).getImage());
@@ -22,7 +22,7 @@ delta dCopyPhotoAndSMS {
 
 		modifies addImageDataToAlbum(AbstractController controller, String photoname, String albumname) {
 
-			Image img = ((AddPhotoToAlbum) controller.getCurrentScreen()).getImage();
+			Image img = ((AddMediaToAlbum) controller.getCurrentScreen()).getImage();
 			if (img != null) {
 				controller.getAlbumData().addImageData(photoname, img, albumname);
 			}
@@ -36,59 +36,62 @@ delta dCopyPhotoAndSMS {
 
 	modifies lancs.mobilemedia.core.ui.datamodel.AlbumData {
 
-		adds public void addImageData(String photoname, Image img, String albumname)
+		adds public void addImageData(String photoname, Image imgdata, String albumname)
 				throws InvalidImageDataException, PersistenceMechanismException {
 
-			imageAccessor.addImageData(photoname,img,albumname);
+			if (mediaAccessor instanceof ImageMediaAccessor)
+					((ImageMediaAccessor) mediaAccessor).addImageData(photoname, imgdata, albumname);
 		}
 	}
 
-	modifies lancs.mobilemedia.core.ui.datamodel.ImageAccessor {
+	modifies lancs.mobilemedia.core.ui.datamodel.ImageMediaAccessor {
+
+		adds import javax.microedition.lcdui.Image;
+		adds import javax.microedition.rms.RecordStore;
+		adds import javax.microedition.rms.RecordStoreException;
+
+		adds public byte[] getByteFromImage(Image img) {
+			int w = img.getWidth();
+			int h = img.getHeight();
+/*			int data_int[] = new int[ w * h ]; TODO review DeltaJ does not accept multiply operator *
+			img.getRGB( data_int, 0, w, 0, 0, w, h );
+			byte[] data_byte = new byte[ w * h * 3 ];
+
+			for ( int i = 0; i < w * h; ++i ) {
+				int color = data_int[ i ];
+				int offset = i * 3;
+				data_byte[ offset ] = ( byte ) ( ( color & 0xff0000 ) >> 16 );
+				data_byte[ offset +	1 ] = ( byte ) ( ( color & 0xff00 ) >> 8 );
+				data_byte[ offset + 2 ] = ( byte ) ( ( color & 0xff ) );
+			}
+			return data_byte; */
+			return null;
+		}
 
 		adds public void addImageData(String photoname, Image imgdata, String albumname) throws InvalidImageDataException, PersistenceMechanismException {
-
 			try {
-				imageRS = RecordStore.openRecordStore(ALBUM_LABEL + albumname, true);
-				imageInfoRS = RecordStore.openRecordStore(INFO_LABEL + albumname, true);
-				int rid;
-				int rid2;
-
-				ImageUtil converter = new ImageUtil();
-
 				byte[] data1 = getByteFromImage(imgdata);
-				rid = imageRS.addRecord(data1, 0, data1.length);
-				ImageData ii = new ImageData(rid, ImageAccessor.ALBUM_LABEL
-						+ albumname, photoname);
-				rid2 = imageInfoRS.getNextRecordID();
-				ii.setRecordId(rid2);
-				data1 = converter.getBytesFromImageInfo(ii);
-				imageInfoRS.addRecord(data1, 0, data1.length);
-
-				imageRS.closeRecordStore();
-
-				imageInfoRS.closeRecordStore();
+				addMediaArrayOfBytes(photoname, albumname, data1);
 			} catch (RecordStoreException e) {
 				throw new PersistenceMechanismException();
 			}
 		}
+	}
 
-		adds public byte[] getByteFromImage(Image img){
-			int w = img.getWidth();
-			int h = img.getHeight();
-			/* int data_int[] = new int[ w * h ];
-			img.getRGB( data_int, 0, w, 0, 0, w, h );
-			byte[] data_byte = new byte[ w * h * 3 ];
-			for ( int i = 0; i < w * h; ++i )
-			{
-				int color = data_int[ i ];
-				int offset = i * 3;
-				data_byte[ offset ] = ( byte ) ( ( color & 0xff0000 ) >> 16 );
-				data_byte[ offset +
-				           1 ] = ( byte ) ( ( color & 0xff00 ) >> 8 );
-				data_byte[ offset + 2 ] = ( byte ) ( ( color & 0xff ) );
-			}
-			return data_byte;*/
-			return null;
+	//package lancs.mobilemedia.core.ui.screens
+
+	modifies lancs.mobilemedia.core.ui.screens.AddMediaToAlbum {
+
+		adds import javax.microedition.lcdui.Image;
+
+		adds Image image = null;
+
+		adds public Image getImage() {
+			return image;
+		}
+
+		adds public void setImage(Image image) {
+			this.image = image;
 		}
 	}
 }

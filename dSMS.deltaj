@@ -23,8 +23,8 @@ delta dSMS {
 		adds import lancs.mobilemedia.sms.SmsReceiverController;
 		adds import lancs.mobilemedia.sms.SmsReceiverThread;
 
-		modifies createAditionalControllers(AlbumData model,
-			AlbumListScreen album, AlbumController albumController) {
+		modifies createAditionalControllers(AlbumData model, AlbumListScreen album,
+				AlbumController albumController) {
 
 			SmsReceiverController controller = new SmsReceiverController(this, model, album);
 			controller.setNextController(albumController);
@@ -99,19 +99,17 @@ delta dSMS {
 		import lancs.mobilemedia.core.ui.controller.AbstractController;
 		import lancs.mobilemedia.core.ui.controller.ControllerCommandInterface;
 		import lancs.mobilemedia.core.ui.controller.PhotoViewController;
+		import lancs.mobilemedia.core.ui.screens.AlbumListScreen;
 		import lancs.mobilemedia.core.ui.screens.PhotoViewScreen;
 
 		public class AcceptPhoto implements ControllerCommandInterface {
 
 			public boolean execute(AbstractController controller) {
-				Image image = Image.createImage((( SmsReceiverController )
-						controller).getIncomingImageData(), 0,(( SmsReceiverController )
-						controller).getIncomingImageData().length);
+				Image image = Image.createImage(((SmsReceiverController) controller).getIncomingImageData(), 0, ((SmsReceiverController) controller).getIncomingImageData().length);
 				Image copy = Image.createImage(image.getWidth(), image.getHeight());
 				PhotoViewScreen canv = new PhotoViewScreen(copy);
 				canv.setFromSMS(true);
-				canv.setCommandListener(new PhotoViewController(controller.getMidlet(),
-						controller.getAlbumData(), controller.getAlbumListScreen(), "NoName"));
+				canv.setCommandListener(new PhotoViewController(controller.getMidlet(), controller.getAlbumData(), (AlbumListScreen) controller.getAlbumListScreen(), "NoName"));
 				controller.setCurrentScreen(canv);
 				return true;
 			}
@@ -228,8 +226,8 @@ delta dSMS {
 		import lancs.mobilemedia.core.ui.controller.AbstractController;
 		import lancs.mobilemedia.core.ui.controller.ControllerCommandInterface;
 		import lancs.mobilemedia.core.ui.datamodel.AlbumData;
-		import lancs.mobilemedia.core.ui.datamodel.ImageAccessor;
-		import lancs.mobilemedia.core.ui.datamodel.ImageData;
+		import lancs.mobilemedia.core.ui.datamodel.MediaAccessor;
+		import lancs.mobilemedia.core.ui.datamodel.MediaData;
 		import lancs.mobilemedia.lib.exceptions.ImageNotFoundException;
 		import lancs.mobilemedia.lib.exceptions.NullAlbumDataReference;
 		import lancs.mobilemedia.lib.exceptions.PersistenceMechanismException;
@@ -237,51 +235,30 @@ delta dSMS {
 		public class SendNow implements ControllerCommandInterface {
 
 			public boolean execute(AbstractController controller) {
-				ImageData ii = null;
-				ImageAccessor imageAccessor = null;
-				byte [] imageBytes = null;
+				MediaData ii = null;
+				byte[] imageBytes = null;
 				try {
-					ii = controller.getAlbumData().getImageInfo((( SmsSenderController )
-							controller).getSelectedImageName());
-					imageBytes = imageAccessor.loadImageBytesFromRMS(ii.getParentAlbumName(),
-						ii.getImageLabel(), ii.getForeignRecordId());
-				}
-				catch(ImageNotFoundException e) {
-					Alert alert = new Alert("Error", "The selected image can not be found",
-						null, AlertType.ERROR);
+					ii = controller.getAlbumData().getMediaInfo(((SmsSenderController) controller).getImageName());
+					imageBytes = controller.getAlbumData().loadMediaBytesFromRMS(ii.getParentAlbumName(), ii.getForeignRecordId());
+				} catch (ImageNotFoundException e) {
+					Alert alert = new Alert("Error", "The selected image can not be found", null, AlertType.ERROR);
+					alert.setTimeout(5000);
+				} catch (PersistenceMechanismException e) {
+					Alert alert = new Alert("Error", "It was not possible to recovery the selected image", null, AlertType.ERROR);
 					alert.setTimeout(5000);
 				}
-				catch(NullAlbumDataReference e) {
-					controller.setAlbumData(new AlbumData());
-					Alert alert = new Alert("Error",
-						"The operation is not available. Try again later !", null,
-						AlertType.ERROR);
-					Display.getDisplay(controller.getMidlet()).setCurrent(alert,
-						Display.getDisplay(controller.getMidlet()).getCurrent());
-				}
-				catch(PersistenceMechanismException e) {
-					Alert alert = new Alert("Error",
-						"It was not possible to recovery the selected image", null,
-						AlertType.ERROR);
-					alert.setTimeout(5000);
-				}
-				System.out.println("SmsController::handleCommand - Sending bytes for image "
-					+ ii.getImageLabel() + " with length: " + imageBytes.length);
+				System.out.println("SmsController::handleCommand - Sending bytes for image " + ii.getMediaLabel() + " with length: " + imageBytes.length);
 
 				String smsPort = "1000";
 				String destinationAddress = "5550001";
 				String messageText = "Binary Message (No Text)";
 
-				smsPort =(( SmsSenderController )
-					controller).getNetworkScreen().getRecPort();
-				destinationAddress =(( SmsSenderController )
-					controller).getNetworkScreen().getRecPhoneNum();
+				smsPort = ((SmsSenderController) controller).getNetworkScreen().getRecPort();
+				destinationAddress = ((SmsSenderController) controller).getNetworkScreen().getRecPhoneNum();
 
-				System.out.println("SmsController:handleCommand() - Info from Network Screen is: "
-					+ smsPort + " and " + destinationAddress);
+				System.out.println("SmsController:handleCommand() - Info from Network Screen is: " + smsPort + " and " + destinationAddress);
 
-				SmsSenderThread smsS = new SmsSenderThread(smsPort, destinationAddress,
-					messageText);
+				SmsSenderThread smsS = new SmsSenderThread(smsPort, destinationAddress, messageText);
 				smsS.setBinaryData(imageBytes);
 				new Thread(smsS).start();
 				return true;
@@ -512,7 +489,7 @@ delta dSMS {
 			}
 
 			public boolean goToPreviousScreen() {
-				getAlbumListScreen().repaintListAlbum(getAlbumData().getAlbumNames());
+				((AlbumListScreen) getAlbumListScreen()).repaintListAlbum(getAlbumData().getAlbumNames());
 				setCurrentScreen(getAlbumListScreen());
 				ScreenSingleton.getInstance().setCurrentScreenName(Constants.ALBUMLIST_SCREEN);
 				return true;

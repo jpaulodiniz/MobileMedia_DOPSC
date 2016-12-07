@@ -1,0 +1,47 @@
+delta dNotPhoto {
+
+	//package lancs.mobilemedia.core.ui;
+
+	modifies lancs.mobilemedia.core.ui.MainUIMidlet {
+
+		removes import lancs.mobilemedia.core.ui.datamodel.ImageAlbumData;
+
+		removes imageRootController;
+		removes imageModel;
+
+		modifies startControllers() {
+			//do nothing
+		}
+
+		modifies initControllers() {
+			//do nothing
+		}
+	}
+
+	//package lancs.mobilemedia.core.ui.controller
+
+	modifies lancs.mobilemedia.core.ui.controller.MediaController {
+
+		removes import lancs.mobilemedia.core.ui.datamodel.ImageAlbumData;
+		removes import lancs.mobilemedia.core.ui.screens.PhotoViewScreen;
+
+		removes showImage(String);
+		removes extendedOperations(String, PhotoViewScreen, AbstractController nextController);
+
+		modifies initAditionalCommandsToMap() {
+			//do nothing
+		}
+	}
+
+	removes lancs.mobilemedia.core.ui.controller.PhotoViewController;
+	removes lancs.mobilemedia.core.ui.controller.ViewPhoto;
+
+	//package lancs.mobilemedia.core.ui.datamodel
+
+	removes lancs.mobilemedia.core.ui.datamodel.ImageAlbumData;
+	removes lancs.mobilemedia.core.ui.datamodel.ImageMediaAccessor;
+
+	//package lancs.mobilemedia.core.ui.screens
+
+	removes lancs.mobilemedia.core.ui.screens.PhotoViewScreen;
+}

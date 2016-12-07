@@ -1,0 +1,100 @@
+delta dCopyMediaAndMusic {
+
+	adds {
+		package lancs.mobilemedia.core.ui.controller;
+
+		import javax.microedition.lcdui.Display;
+
+		import lancs.mobilemedia.core.ui.screens.AddMediaToAlbum;
+
+		public class CopyMedia implements ControllerCommandInterface {
+
+			public boolean execute(AbstractController controller) {
+				AddMediaToAlbum copyPhotoToAlbum = new AddMediaToAlbum("Copy Media to Album");
+				copyPhotoToAlbum.setItemName(((MusicPlayController) controller).getMediaName());
+				copyPhotoToAlbum.setLabelPath("Copy to Album:");
+				copyPhotoToAlbum.setCommandListener(controller);
+				Display.getDisplay(controller.getMidlet()).setCurrent(copyPhotoToAlbum);
+
+				return true;
+			}
+		}
+	}
+
+	modifies lancs.mobilemedia.core.ui.controller.MusicPlayController {
+
+		modifies initCommandsMap() {
+			original();
+			commands.put("Copy", new CopyMedia());
+			commands.put("Save Item", new SaveCopiedMedia());
+		}
+	}
+
+	adds {
+		package lancs.mobilemedia.core.ui.controller;
+
+		import javax.microedition.lcdui.Alert;
+		import javax.microedition.lcdui.AlertType;
+		import javax.microedition.lcdui.Display;
+		import javax.microedition.rms.RecordStoreFullException;
+
+		import lancs.mobilemedia.core.ui.datamodel.MediaData;
+		import lancs.mobilemedia.core.ui.screens.AddMediaToAlbum;
+		import lancs.mobilemedia.core.ui.screens.AlbumListScreen;
+		import lancs.mobilemedia.core.util.Constants;
+		import lancs.mobilemedia.lib.exceptions.ImageNotFoundException;
+		import lancs.mobilemedia.lib.exceptions.ImagePathNotValidException;
+		import lancs.mobilemedia.lib.exceptions.InvalidImageDataException;
+		import lancs.mobilemedia.lib.exceptions.NullAlbumDataReference;
+		import lancs.mobilemedia.lib.exceptions.PersistenceMechanismException;
+
+		public class SaveCopiedMedia implements ControllerCommandInterface {
+
+			public boolean execute(AbstractController controller) {
+				try {
+					MediaData imageData = null;
+					try {
+						imageData = controller.getAlbumData().getMediaInfo(((MusicPlayController) controller).getMediaName());
+					} catch (ImageNotFoundException e) {
+						Alert alert = new Alert("Error", "The selected photo was not found in the mobile device", null, AlertType.ERROR);
+						Display.getDisplay(controller.getMidlet()).setCurrent(alert, Display.getDisplay(controller.getMidlet()).getCurrent());
+					}
+					String albumname = ((AddMediaToAlbum) controller.getCurrentScreen()).getPath();
+					controller.getAlbumData().addMediaData(imageData, albumname);
+				} catch (InvalidImageDataException e) {
+					Alert alert = null;
+					if (e instanceof ImagePathNotValidException)
+						alert = new Alert("Error", "The path is not valid", null, AlertType.ERROR);
+					else
+						alert = new Alert("Error", "The music file format is not valid", null, AlertType.ERROR);
+					Display.getDisplay(controller.getMidlet()).setCurrent(alert, Display.getDisplay(controller.getMidlet()).getCurrent());
+					return true;
+				} catch (PersistenceMechanismException e) {
+					Alert alert = null;
+					if (e.getCause() instanceof RecordStoreFullException)
+						alert = new Alert("Error", "The mobile database is full", null, AlertType.ERROR);
+					else
+						alert = new Alert("Error", "The mobile database can not add a new music", null, AlertType.ERROR);
+					Display.getDisplay(controller.getMidlet()).setCurrent(alert, Display.getDisplay(controller.getMidlet()).getCurrent());
+				}
+
+				((AlbumListScreen) controller.getAlbumListScreen()).repaintListAlbum(controller.getAlbumData().getAlbumNames());
+				controller.setCurrentScreen(controller.getAlbumListScreen());
+				ScreenSingleton.getInstance().setCurrentScreenName(Constants.ALBUMLIST_SCREEN);
+
+				return true;
+			}
+		}
+	}
+
+	//package lancs.mobilemedia.core.ui.screens
+
+	modifies lancs.mobilemedia.core.ui.screens.PlayMediaScreen {
+		adds public static final Command copyCommand = new Command("Copy", Command.ITEM, 1);
+
+		modifies initMenu(Form form) {
+			original(form);
+			form.addCommand(copyCommand);
+		}
+	}
+}

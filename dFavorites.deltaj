@@ -11,23 +11,21 @@ delta dFavorites {
 		}
 	}
 
-	modifies lancs.mobilemedia.core.ui.controller.PhotoListController {
+	modifies lancs.mobilemedia.core.ui.controller.MediaListController {
 
-		adds public static final int SHOW_IMAGE_LIST_FAVORITES_MODE = 3; //used as showImageList parameter
+		adds public static final int SHOW_MEDIA_LIST_FAVORITES_MODE = 3; //used as showImageList parameter
 
-		modifies fillImageList(PhotoListScreen imageList, ImageData [] images, int imageListMode) {
+		modifies fillMediaList(MediaListScreen mediaList, MediaData [] medias, int mediaListMode) {
 
-			if(imageListMode == SHOW_IMAGE_LIST_FAVORITES_MODE) {
-				for(int i = 0;
-					i < images.length;
-					i ++) {
-					if(images[i] != null && images[i].isFavorite()) {
-						imageList.append(images[i].getImageLabel(), null);
+			if (mediaListMode == SHOW_MEDIA_LIST_FAVORITES_MODE) {
+				for (int i = 0; i < medias.length; i++) {
+					if (medias[i] != null && medias[i].isFavorite()) {
+						mediaList.append(medias[i].getMediaLabel(), null);
 					}
 				}
 			}
 			else {
-				original(imageList, images, imageListMode);
+				original(mediaList, medias, mediaListMode);
 			}
 		}
 	}
@@ -41,31 +39,26 @@ delta dFavorites {
 		import javax.microedition.rms.RecordStoreFullException;
 
 		import lancs.mobilemedia.core.ui.datamodel.AlbumData;
-		import lancs.mobilemedia.core.ui.datamodel.ImageData;
+		import lancs.mobilemedia.core.ui.datamodel.MediaData;
 		import lancs.mobilemedia.lib.exceptions.ImageNotFoundException;
-		import lancs.mobilemedia.lib.exceptions.ImagePathNotValidException;
 		import lancs.mobilemedia.lib.exceptions.InvalidImageDataException;
+		import lancs.mobilemedia.lib.exceptions.ImagePathNotValidException;
 		import lancs.mobilemedia.lib.exceptions.NullAlbumDataReference;
 		import lancs.mobilemedia.lib.exceptions.PersistenceMechanismException;
 
 		public class SetFavorite implements ControllerCommandInterface {
 
 			public boolean execute(AbstractController controller) {
-				String selectedImageName = ((PhotoController) controller).getSelectedImageName();
+				String selectedMediaName = ((MediaController) controller).getSelectedMediaName();
 				try {
-					ImageData image = controller.getAlbumData().getImageInfo(selectedImageName);
-					image.toggleFavorite();
-					((PhotoController) controller).updateImage(image);
-					System.out.println("<* BaseController.handleCommand() *> Image = " + selectedImageName + "; Favorite = " + image.isFavorite());
+					MediaData media = controller.getAlbumData().getMediaInfo(selectedMediaName);
+					media.toggleFavorite();
+					((MediaController) controller).updateMedia(media);
+					System.out.println("<* BaseController.handleCommand() *> Image = "+ selectedMediaName + "; Favorite = " + media.isFavorite());
 				} catch (ImageNotFoundException e) {
-					Alert alert = new Alert("Error", "The selected photo was not found in the mobile device", null, AlertType.ERROR);
+					Alert alert = new Alert("Error", "The selected item was not found in the mobile device", null, AlertType.ERROR);
 					Display.getDisplay(controller.getMidlet()).setCurrent(alert, Display.getDisplay(controller.getMidlet()).getCurrent());
-				} catch (NullAlbumDataReference e) {
-					controller.setAlbumData(new AlbumData());
-					Alert alert = new Alert("Error", "The operation is not available. Try again later !", null, AlertType.ERROR);
-					Display.getDisplay(controller.getMidlet()).setCurrent(alert, Display.getDisplay(controller.getMidlet()).getCurrent());
-				}
-				catch (InvalidImageDataException e) {
+				} catch (InvalidImageDataException e) {
 					Alert alert = null;
 					if (e instanceof ImagePathNotValidException)
 						alert = new Alert("Error", "The path is not valid", null, AlertType.ERROR);
@@ -92,10 +85,9 @@ delta dFavorites {
 
 		public class ViewFavorites implements ControllerCommandInterface {
 
-			public boolean execute(AbstractController controller) {((
-					PhotoListController )
-					controller).showImageList(controller.getCurrentStoreName(),
-					PhotoListController.SHOW_IMAGE_LIST_FAVORITES_MODE);
+			public boolean execute(AbstractController controller) {
+
+				((MediaListController) controller).showMediaList(controller.getCurrentStoreName(), MediaListController.SHOW_MEDIA_LIST_FAVORITES_MODE);
 				ScreenSingleton.getInstance().setCurrentScreenName(Constants.IMAGELIST_SCREEN);
 				return true;
 			}
@@ -104,7 +96,7 @@ delta dFavorites {
 
 	//package lancs.mobilemedia.core.ui.datamodel
 
-	modifies lancs.mobilemedia.core.ui.datamodel.ImageData {
+	modifies lancs.mobilemedia.core.ui.datamodel.MediaData {
 
 		adds private boolean favorite = false;
 
@@ -121,9 +113,17 @@ delta dFavorites {
 		}
 	}
 
+	modifies lancs.mobilemedia.core.ui.datamodel.MultiMediaData {
+
+		modifies completeMediaData(MediaData mdata) {
+			original(mdata);
+			super.setFavorite(mdata.isFavorite());
+		}
+	}
+
 	//package lancs.mobilemedia.core.ui.screens
 
-	modifies lancs.mobilemedia.core.ui.screens.PhotoListScreen {
+	modifies lancs.mobilemedia.core.ui.screens.MediaListScreen {
 
 		adds public static final Command favoriteCommand = new
 		Command("Set Favorite", Command.ITEM, 1);
@@ -150,12 +150,11 @@ delta dFavorites {
 			endIndex = iiString.indexOf(delimiter, startIndex);
 			if(endIndex == - 1) endIndex = iiString.length();
 
-			favorite =(iiString.substring(startIndex,
-					endIndex)).equalsIgnoreCase("true");
+			favorite = (iiString.substring(startIndex, endIndex)).equalsIgnoreCase("true");
 			ii.setFavorite(favorite);
 		}
 
-		modifies retrieveImageByteString(ImageData ii) {
+		modifies retrieveMediaByteString(MediaData ii) {
 
 			String byteString = original(ii);
 			byteString = byteString.concat(DELIMITER);

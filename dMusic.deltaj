@@ -1,0 +1,502 @@
+delta dMusic {
+
+//package lancs.mobilemedia.core.ui;
+
+	modifies lancs.mobilemedia.core.ui.MainUIMidlet {
+
+		adds import lancs.mobilemedia.core.ui.controller.AlbumController;
+		adds import lancs.mobilemedia.core.ui.controller.BaseController;
+		adds import lancs.mobilemedia.core.ui.controller.MediaListController;
+		adds import lancs.mobilemedia.core.ui.datamodel.AlbumData;
+		adds import lancs.mobilemedia.core.ui.datamodel.MusicAlbumData;
+		adds import lancs.mobilemedia.core.ui.screens.AlbumListScreen;
+
+		adds private BaseController musicRootController;
+		adds private AlbumData musicModel;
+
+		modifies startControllers() {
+			original();
+			this.musicModel = new MusicAlbumData();
+
+			AlbumListScreen albumMusic = new AlbumListScreen();
+			this.musicRootController = new BaseController(this, this.musicModel, albumMusic);
+
+			MediaListController musicListController = new MediaListController(this, this.musicModel, albumMusic);
+			musicListController.setNextController(this.musicRootController);
+
+			AlbumController albumMusicController = new AlbumController(this, this.musicModel, albumMusic);
+			albumMusicController.setNextController(musicListController);
+			albumMusic.setCommandListener(albumMusicController);
+		}
+
+		modifies initControllers() {
+			original();
+			this.musicRootController.init(this.musicModel);
+		}
+	}
+
+	//package lancs.mobilemedia.core.ui.controller
+
+	modifies lancs.mobilemedia.core.ui.controller.MediaListController {
+
+		adds import lancs.mobilemedia.core.ui.datamodel.MusicAlbumData;
+
+		modifies createMediaList(MediaListScreen mediaList) {
+
+			if ((getAlbumData() instanceof MusicAlbumData)) {
+				mediaList = new MediaListScreen(MediaListScreen.PLAYMUSIC);
+			}
+
+			return original(mediaList);
+		}
+	}
+
+	adds {
+		package lancs.mobilemedia.core.ui.controller;
+
+		import javax.microedition.lcdui.Alert;
+		import javax.microedition.lcdui.AlertType;
+		import javax.microedition.lcdui.Command;
+		import javax.microedition.lcdui.Display;
+		import javax.microedition.lcdui.List;
+		import javax.microedition.rms.RecordStoreFullException;
+		import java.util.HashMap;
+
+		import lancs.mobilemedia.core.ui.MainUIMidlet;
+		import lancs.mobilemedia.core.ui.datamodel.AlbumData;
+		import lancs.mobilemedia.core.ui.datamodel.MediaData;
+		import lancs.mobilemedia.core.ui.screens.AlbumListScreen;
+		import lancs.mobilemedia.core.ui.screens.PlayMediaScreen;
+		import lancs.mobilemedia.core.util.Constants;
+		import lancs.mobilemedia.lib.exceptions.ImageNotFoundException;
+		import lancs.mobilemedia.lib.exceptions.ImagePathNotValidException;
+		import lancs.mobilemedia.lib.exceptions.InvalidImageDataException;
+		import lancs.mobilemedia.lib.exceptions.PersistenceMechanismException;
+
+		public class MusicPlayController extends AbstractController {
+
+			private PlayMediaScreen pmscreen;
+
+			private String mediaName;
+
+			public MusicPlayController(MainUIMidlet midlet, AlbumData albumData, List
+				albumListScreen, PlayMediaScreen pmscreen) {
+				super(midlet, albumData, albumListScreen);
+				this.pmscreen = pmscreen;
+			}
+
+			public void initCommandsMap() {
+				commands = new HashMap();
+				commands.put("Start", new PlayMusic());
+				commands.put("Stop", new StopMusic());
+			}
+
+			public boolean handleCommand(Command c) {
+				String label = c.getLabel();
+
+				System.out.println("<* MusicPlayController.handleCommand() *> " + label);
+
+				command = ( ControllerCommandInterface ) commands.get(label);
+
+				if(command != null) {
+					return command.execute(this);
+				}
+				else if(label.equals("Back") || label.equals("Cancel")) {
+					return goToPreviousScreen();
+				}
+
+				return false;
+			}
+
+			protected boolean goToPreviousScreen() {
+				pmscreen.pausePlay();(( AlbumListScreen )
+					getAlbumListScreen()).repaintListAlbum(getAlbumData().getAlbumNames());
+				setCurrentScreen(getAlbumListScreen());
+				ScreenSingleton.getInstance().setCurrentScreenName(Constants.ALBUMLIST_SCREEN);
+
+				return true;
+			}
+
+			public void startPlay() {
+				pmscreen.startPlay();
+			}
+
+			public void pausePlay() {
+				pmscreen.pausePlay();
+			}
+			public String getMediaName() {
+				return mediaName;
+			}
+
+			public void setMediaName(String mediaNameParam) {
+				mediaName = mediaNameParam;
+			}
+		}
+	}
+
+	adds {
+		package lancs.mobilemedia.core.ui.controller;
+
+		public class PlayMusic implements ControllerCommandInterface {
+
+			public boolean execute(AbstractController controller) {((
+					MusicPlayController ) controller).startPlay();
+				return true;
+			}
+		}
+	}
+
+	adds {
+		package lancs.mobilemedia.core.ui.controller;
+
+		public class StopMusic implements ControllerCommandInterface {
+
+			public boolean execute(AbstractController controller) {((
+					MusicPlayController ) controller).pausePlay();
+				return true;
+			}
+		}
+	}
+
+	//package lancs.mobilemedia.core.ui.datamodel
+
+	adds {
+		package lancs.mobilemedia.core.ui.datamodel;
+
+		import java.io.ByteArrayInputStream;
+		import java.io.InputStream;
+
+		import lancs.mobilemedia.lib.exceptions.ImageNotFoundException;
+		import lancs.mobilemedia.lib.exceptions.PersistenceMechanismException;
+
+		public class MusicAlbumData extends AlbumData {
+
+			public MusicAlbumData() {
+				mediaAccessor = new MusicMediaAccessor();
+			}
+
+			public InputStream getMusicFromRecordStore(String recordStore, String
+				musicName) throws ImageNotFoundException, PersistenceMechanismException {
+
+				MediaData mediaInfo = null;
+				mediaInfo = mediaAccessor.getMediaInfo(musicName);
+				int mediaId = mediaInfo.getForeignRecordId();
+				String album = mediaInfo.getParentAlbumName();
+				byte [] musicData =(mediaAccessor).loadMediaBytesFromRMS(album, mediaId);
+				return new ByteArrayInputStream(musicData);
+			}
+		}
+	}
+
+	adds {
+		package lancs.mobilemedia.core.ui.datamodel;
+
+		import javax.microedition.rms.RecordStore;
+		import javax.microedition.rms.RecordStoreException;
+
+		import lancs.mobilemedia.core.util.MusicMediaUtil;
+		import lancs.mobilemedia.lib.exceptions.ImageNotFoundException;
+		import lancs.mobilemedia.lib.exceptions.ImagePathNotValidException;
+		import lancs.mobilemedia.lib.exceptions.InvalidArrayFormatException;
+		import lancs.mobilemedia.lib.exceptions.InvalidImageDataException;
+		import lancs.mobilemedia.lib.exceptions.InvalidImageFormatException;
+		import lancs.mobilemedia.lib.exceptions.PersistenceMechanismException;
+
+		public class MusicMediaAccessor extends MediaAccessor {
+
+			private MusicMediaUtil converter = new MusicMediaUtil();
+
+			public MusicMediaAccessor() {
+				super("mmp-", "mmpi-", "My Music Album");
+			}
+
+			protected byte [] getMediaArrayOfByte(String path) throws
+			ImagePathNotValidException, InvalidImageFormatException {
+				byte [] data1 = converter.readMediaAsByteArray(path);
+				return data1;
+			}
+
+			protected byte [] getByteFromMediaInfo(MediaData ii) throws
+			InvalidImageDataException {
+				return converter.getBytesFromMediaInfo(ii);
+			}
+
+			protected MediaData getMediaFromBytes(byte [] data) throws
+			InvalidArrayFormatException {
+				MediaData iiObject = converter.getMultiMediaInfoFromBytes(data);
+				return iiObject;
+			}
+
+			public void resetRecordStore() throws InvalidImageDataException,
+			PersistenceMechanismException {
+				String storeName = null;
+				String infoStoreName = null;
+
+				if(albumNames != null) {
+					for(int i = 0;
+						i < albumNames.length;
+						i ++) {
+						try {
+							storeName = album_label + albumNames[i];
+							infoStoreName = info_label + albumNames[i];
+
+							System.out.println("<* ImageAccessor.resetImageRecordStore() *> delete "
+								+ storeName);
+
+							RecordStore.deleteRecordStore(storeName);
+							RecordStore.deleteRecordStore(infoStoreName);
+
+						}
+						catch(RecordStoreException e) {
+							System.out.println("No record store named " + storeName +
+								" to delete.");
+							System.out.println("...or...No record store named " + infoStoreName +
+								" to delete.");
+							System.out.println("Ignoring Exception: " + e);
+						}
+					}
+				}
+				else {
+					System.out.println("ImageAccessor::resetImageRecordStore: albumNames array was null. Nothing to delete.");
+				}
+
+				MediaData media = null;
+				MultiMediaData mmedi = null;
+
+				addMediaData("Applause", "/images/applause.wav", default_album_name);
+				addMediaData("Baby", "/images/baby.wav", default_album_name);
+				addMediaData("Bong", "/images/bong.wav", default_album_name);
+				addMediaData("Frogs", "/images/frogs.mp3", default_album_name);
+				addMediaData("Jump", "/images/jump.wav", default_album_name);
+				addMediaData("Printer", "/images/printer.wav", default_album_name);
+				addMediaData("Tango", "/images/cabeza.mid", default_album_name);
+
+				loadMediaDataFromRMS(default_album_name);
+
+				try {
+					media = this.getMediaInfo("Applause");
+
+					mmedi = new MultiMediaData(media, "audio/x-wav");
+					this.updateMediaInfo(media, mmedi);
+
+					media = this.getMediaInfo("Baby");
+					mmedi = new MultiMediaData(media, "audio/x-wav");
+					this.updateMediaInfo(media, mmedi);
+
+					media = this.getMediaInfo("Bong");
+					mmedi = new MultiMediaData(media, "audio/x-wav");
+					this.updateMediaInfo(media, mmedi);
+
+					media = this.getMediaInfo("Frogs");
+					mmedi = new MultiMediaData(media, "audio/mpeg");
+					this.updateMediaInfo(media, mmedi);
+
+					media = this.getMediaInfo("Jump");
+					mmedi = new MultiMediaData(media, "audio/x-wav");
+					this.updateMediaInfo(media, mmedi);
+
+					media = this.getMediaInfo("Printer");
+					mmedi = new MultiMediaData(media, "audio/x-wav");
+					this.updateMediaInfo(media, mmedi);
+
+					media = this.getMediaInfo("Tango");
+					mmedi = new MultiMediaData(media, "audio/midi");
+					this.updateMediaInfo(media, mmedi);
+				}
+				catch(ImageNotFoundException e) {
+					e.printStackTrace();
+				}
+			}
+		}
+	}
+
+	//package lancs.mobilemedia.core.ui.screens
+
+	modifies lancs.mobilemedia.core.ui.screens.MediaListScreen {
+
+		adds public static final int PLAYMUSIC = 2;
+		adds public static final Command playCommand = new Command("Play", Command.ITEM, 1);
+
+		modifies initMenu() {
+			original();
+			if (typeOfScreen == PLAYMUSIC) this.addCommand(playCommand);
+		}
+	}
+
+	adds {
+		package lancs.mobilemedia.core.ui.screens;
+
+		import java.io.InputStream;
+
+		import javax.microedition.lcdui.Canvas;
+		import javax.microedition.lcdui.Command;
+		import javax.microedition.lcdui.Display;
+		import javax.microedition.lcdui.Form;
+		import javax.microedition.lcdui.Gauge;
+		import javax.microedition.lcdui.Graphics;
+		import javax.microedition.lcdui.Item;
+		import javax.microedition.lcdui.ItemStateListener;
+		import javax.microedition.media.Manager;
+		import javax.microedition.media.Player;
+		import javax.microedition.media.control.PitchControl;
+		import javax.microedition.media.control.TempoControl;
+		import javax.microedition.media.control.VolumeControl;
+
+		import lancs.mobilemedia.core.ui.MainUIMidlet;
+		import lancs.mobilemedia.core.ui.controller.AbstractController;
+
+		public class PlayMediaScreen extends Canvas implements ItemStateListener {
+
+			public static final Command start = new Command("Start", Command.BACK, 0);
+			public static final Command back = new Command("Back", Command.ITEM, 1);
+			public static final Command stop = new Command("Stop", Command.ITEM, 1);
+
+			Player midiPlayer = null;
+
+			VolumeControl volControl = null;
+			PitchControl pitchControl = null;
+			TempoControl tempoControl = null;
+
+			Form form = null;
+			Gauge volGauge = null;
+			Gauge pitchGauge = null;
+			Gauge tempoGauge = null;
+
+			public PlayMediaScreen(MainUIMidlet midlet, InputStream storedMusic,
+					String type, AbstractController controller) {
+				try {
+					midiPlayer = Manager.createPlayer(storedMusic, type);
+					midiPlayer.prefetch();
+					volControl = ( VolumeControl )
+					midiPlayer.getControl("javax.microedition.media.control.VolumeControl");
+					pitchControl = ( PitchControl )
+					midiPlayer.getControl("javax.microedition.media.control.PitchControl");
+					tempoControl = ( TempoControl )
+					midiPlayer.getControl("javax.microedition.media.control.TempoControl");
+					form = new Form("MIDI Player", null);
+
+					initMenu(form); ///[JP]
+
+					form.setCommandListener(controller);
+
+					volGauge = new Gauge("Volume: 50", true, 100, 50);
+					tempoGauge = new Gauge("Tempo: 120", true, 30, 12);
+					pitchGauge = new Gauge("Pitch: 0", true, 10, 5);
+
+					form.append(volGauge);
+					form.append(tempoGauge);
+					form.append(pitchGauge);
+
+					form.setItemStateListener(this);
+					Display.getDisplay(midlet).setCurrent(form);
+
+				}
+				catch(Exception e) {
+					System.err.println(e);
+				}
+			}
+
+			public void initMenu(Form form) {
+				form.addCommand(back);
+				form.addCommand(start);
+				form.addCommand(stop);
+			}
+
+			public void itemStateChanged(final Item item) {
+
+				if(!(item instanceof Gauge)) return;
+
+				Gauge gauge = ( Gauge ) item;
+				int val = gauge.getValue();
+
+				if(item == volGauge) {
+					volControl.setLevel(val);
+					volGauge.setLabel("Volume: " + val);
+				}
+				if(item == tempoGauge && tempoControl != null) {
+					tempoControl.setTempo(( val )  *  10  *  1000);
+					tempoGauge.setLabel("Tempo: " +(val  *  10));
+				}
+
+				if(item == pitchGauge && pitchControl != null) {
+					pitchControl.setPitch((val - 5)  *  12  *  1000 );
+						pitchGauge.setLabel("Pitch: " +(val - 5));
+					}
+				}
+
+				public void startPlay() {
+					try {
+						if(midiPlayer != null) {
+							midiPlayer.start();
+						}
+					}
+					catch(Exception e) {
+						System.err.println(e);
+					}
+				}
+
+				public void pausePlay() {
+					try {
+						if(midiPlayer != null) {
+							midiPlayer.stop();
+						}
+					}
+					catch(Exception e) {
+						System.err.println(e);
+					}
+				}
+
+				protected void paint(Graphics arg0) {
+					//do nothing, according with MobileMedia_CC last version
+				}
+			}
+		}
+
+		//package lancs.mobilemedia.core.util
+
+		adds {
+			package lancs.mobilemedia.core.util;
+
+			import lancs.mobilemedia.core.ui.datamodel.MediaData;
+			import lancs.mobilemedia.core.ui.datamodel.MultiMediaData;
+			import lancs.mobilemedia.lib.exceptions.InvalidArrayFormatException;
+			import lancs.mobilemedia.lib.exceptions.InvalidImageDataException;
+
+			public class MusicMediaUtil extends MediaUtil {
+
+				public byte [] getBytesFromMediaInfo(MediaData ii) throws
+				InvalidImageDataException {
+					try {
+						byte [] mediadata = super.getBytesFromMediaInfo(ii);
+						if(ii instanceof MultiMediaData) {
+							String byteString = new String(mediadata);
+							byteString = byteString.concat(DELIMITER);
+
+							byteString = byteString.concat((( MultiMediaData ) ii).getTypeMedia());
+							return byteString.getBytes();
+						}
+						return mediadata;
+					}
+					catch(Exception e) {
+						throw new InvalidImageDataException("The provided data are not valid");
+					}
+				}
+
+				public MediaData getMultiMediaInfoFromBytes(byte [] bytes) throws
+				InvalidArrayFormatException {
+					MediaData mediadata = super.getMediaInfoFromBytes(bytes);
+					String iiString = new String(bytes);
+
+					int startIndex = endIndex + 1;
+					if(endIndex == iiString.length()) return mediadata;
+
+					endIndex = iiString.indexOf(DELIMITER, startIndex);
+
+					if(endIndex == - 1) endIndex = iiString.length();
+					String mediaType = iiString.substring(startIndex, endIndex);
+					MultiMediaData mmedi = new MultiMediaData(mediadata, mediaType);
+					return mmedi;
+				}
+			}
+		}
+	}
