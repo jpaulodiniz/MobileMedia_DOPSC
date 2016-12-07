@@ -71,34 +71,44 @@ delta dSorting {
 		adds import javax.microedition.lcdui.Alert;
 		adds import javax.microedition.lcdui.AlertType;
 		adds import javax.microedition.lcdui.Display;
+		adds import javax.microedition.rms.RecordStoreFullException;
 
 		adds import lancs.mobilemedia.core.ui.datamodel.AlbumData;
 		adds import lancs.mobilemedia.core.ui.datamodel.ImageData;
 		adds import lancs.mobilemedia.lib.exceptions.ImageNotFoundException;
+		adds import lancs.mobilemedia.lib.exceptions.ImagePathNotValidException;
+		adds import lancs.mobilemedia.lib.exceptions.InvalidImageDataException;
 		adds import lancs.mobilemedia.lib.exceptions.NullAlbumDataReference;
+		adds import lancs.mobilemedia.lib.exceptions.PersistenceMechanismException;
 
-		adds protected void increasePhotoNumberOfViews(AbstractController controller,
-				String selectedImageName) {
+		adds protected void increasePhotoNumberOfViews(AbstractController controller, String selectedImageName) {
 
 			try {
 				ImageData image = controller.getAlbumData().getImageInfo(selectedImageName);
 				image.increaseNumberOfViews();
-				(( PhotoController ) controller).updateImage(image);
-				System.out.println("<* AbstractController.handleCommand() *> Image = " +
-						selectedImageName + "; # views = " + image.getNumberOfViews());
-			}
-			catch(ImageNotFoundException e) {
-				Alert alert = new Alert("Error", "The selected photo was not found in the mobile device",
-						null, AlertType.ERROR);
-				Display.getDisplay(controller.getMidlet()).setCurrent(alert,
-						Display.getDisplay(controller.getMidlet()).getCurrent());
-			}
-			catch(NullAlbumDataReference e) {
+				((PhotoController) controller).updateImage(image);
+				System.out.println("<* BaseController.handleCommand() *> Image = " + selectedImageName + "; # views = " + image.getNumberOfViews());
+			} catch (ImageNotFoundException e) {
+				Alert alert = new Alert("Error", "The selected photo was not found in the mobile device", null, AlertType.ERROR);
+				Display.getDisplay(controller.getMidlet()).setCurrent(alert, Display.getDisplay(controller.getMidlet()).getCurrent());
+			} catch (NullAlbumDataReference e) {
 				controller.setAlbumData(new AlbumData());
-				Alert alert = new Alert("Error", "The operation is not available. Try again later !",
-						null, AlertType.ERROR);
-				Display.getDisplay(controller.getMidlet()).setCurrent(alert,
-						Display.getDisplay(controller.getMidlet()).getCurrent());
+				Alert alert = new Alert( "Error", "The operation is not available. Try again later !", null, AlertType.ERROR);
+				Display.getDisplay(controller.getMidlet()).setCurrent(alert, Display.getDisplay(controller.getMidlet()).getCurrent());
+			} catch (InvalidImageDataException e) {
+				Alert alert = null;
+				if (e instanceof ImagePathNotValidException)
+					alert = new Alert("Error", "The path is not valid", null, AlertType.ERROR);
+				else
+					alert = new Alert("Error", "The image file format is not valid", null, AlertType.ERROR);
+				Display.getDisplay(controller.getMidlet()).setCurrent(alert, Display.getDisplay(controller.getMidlet()).getCurrent());
+			} catch (PersistenceMechanismException e) {
+				Alert alert = null;
+				if (e.getCause() instanceof  RecordStoreFullException)
+					alert = new Alert( "Error", "The mobile database is full", null, AlertType.ERROR);
+				else
+					alert = new Alert( "Error", "The mobile database can not update new informations", null, AlertType.ERROR);
+				Display.getDisplay(controller.getMidlet()).setCurrent(alert, Display.getDisplay(controller.getMidlet()).getCurrent());
 			}
 		}
 
@@ -143,7 +153,7 @@ delta dSorting {
 
 	modifies lancs.mobilemedia.core.util.ImageUtil {
 		adds protected void setImageNumberOfViews(ImageData ii, String iiString,
-				int startIndex, int endIndex, String delimiter) {
+				int	startIndex, int endIndex, String delimiter) {
 
 			startIndex = endIndex + 1;
 			endIndex = iiString.indexOf(delimiter, startIndex);

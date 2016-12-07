@@ -15,8 +15,7 @@ delta dFavorites {
 
 		adds public static final int SHOW_IMAGE_LIST_FAVORITES_MODE = 3; //used as showImageList parameter
 
-		modifies fillImageList(PhotoListScreen imageList, ImageData [] images, int
-			imageListMode) {
+		modifies fillImageList(PhotoListScreen imageList, ImageData [] images, int imageListMode) {
 
 			if(imageListMode == SHOW_IMAGE_LIST_FAVORITES_MODE) {
 				for(int i = 0;
@@ -39,39 +38,47 @@ delta dFavorites {
 		import javax.microedition.lcdui.Alert;
 		import javax.microedition.lcdui.AlertType;
 		import javax.microedition.lcdui.Display;
+		import javax.microedition.rms.RecordStoreFullException;
 
 		import lancs.mobilemedia.core.ui.datamodel.AlbumData;
 		import lancs.mobilemedia.core.ui.datamodel.ImageData;
 		import lancs.mobilemedia.lib.exceptions.ImageNotFoundException;
+		import lancs.mobilemedia.lib.exceptions.ImagePathNotValidException;
+		import lancs.mobilemedia.lib.exceptions.InvalidImageDataException;
 		import lancs.mobilemedia.lib.exceptions.NullAlbumDataReference;
+		import lancs.mobilemedia.lib.exceptions.PersistenceMechanismException;
 
 		public class SetFavorite implements ControllerCommandInterface {
 
 			public boolean execute(AbstractController controller) {
-				String selectedImageName =(( PhotoController )
-					controller).getSelectedImageName();
+				String selectedImageName = ((PhotoController) controller).getSelectedImageName();
 				try {
-					ImageData image =
-					controller.getAlbumData().getImageInfo(selectedImageName);
-					image.toggleFavorite();(( PhotoController )
-						controller).updateImage(image);
-					System.out.println("<* BaseController.handleCommand() *> Image = " +
-						selectedImageName + "; Favorite = " + image.isFavorite());
-				}
-				catch(ImageNotFoundException e) {
-					Alert alert = new Alert("Error",
-						"The selected photo was not found in the mobile device", null,
-						AlertType.ERROR);
-					Display.getDisplay(controller.getMidlet()).setCurrent(alert,
-						Display.getDisplay(controller.getMidlet()).getCurrent());
-				}
-				catch(NullAlbumDataReference e) {
+					ImageData image = controller.getAlbumData().getImageInfo(selectedImageName);
+					image.toggleFavorite();
+					((PhotoController) controller).updateImage(image);
+					System.out.println("<* BaseController.handleCommand() *> Image = " + selectedImageName + "; Favorite = " + image.isFavorite());
+				} catch (ImageNotFoundException e) {
+					Alert alert = new Alert("Error", "The selected photo was not found in the mobile device", null, AlertType.ERROR);
+					Display.getDisplay(controller.getMidlet()).setCurrent(alert, Display.getDisplay(controller.getMidlet()).getCurrent());
+				} catch (NullAlbumDataReference e) {
 					controller.setAlbumData(new AlbumData());
-					Alert alert = new Alert("Error",
-						"The operation is not available. Try again later !", null,
-						AlertType.ERROR);
-					Display.getDisplay(controller.getMidlet()).setCurrent(alert,
-						Display.getDisplay(controller.getMidlet()).getCurrent());
+					Alert alert = new Alert("Error", "The operation is not available. Try again later !", null, AlertType.ERROR);
+					Display.getDisplay(controller.getMidlet()).setCurrent(alert, Display.getDisplay(controller.getMidlet()).getCurrent());
+				}
+				catch (InvalidImageDataException e) {
+					Alert alert = null;
+					if (e instanceof ImagePathNotValidException)
+						alert = new Alert("Error", "The path is not valid", null, AlertType.ERROR);
+					else
+						alert = new Alert("Error", "The image file format is not valid", null, AlertType.ERROR);
+					Display.getDisplay(controller.getMidlet()).setCurrent(alert, Display.getDisplay(controller.getMidlet()).getCurrent());
+				} catch (PersistenceMechanismException e) {
+					Alert alert = null;
+					if (e.getCause() instanceof  RecordStoreFullException)
+						alert = new Alert( "Error", "The mobile database is full", null, AlertType.ERROR);
+					else
+						alert = new Alert( "Error", "The mobile database can not update new informations", null, AlertType.ERROR);
+					Display.getDisplay(controller.getMidlet()).setCurrent(alert, Display.getDisplay(controller.getMidlet()).getCurrent());
 				}
 				return true;
 			}

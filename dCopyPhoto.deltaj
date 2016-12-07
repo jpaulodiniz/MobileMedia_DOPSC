@@ -14,15 +14,19 @@ delta dCopyPhoto {
 		public class CopyPhoto implements ControllerCommandInterface {
 
 			public boolean execute(AbstractController controller) {
-				AddPhotoToAlbum copyPhotoToAlbum = new
-				AddPhotoToAlbum("Copy Photo to Album");
-				copyPhotoToAlbum.setPhotoName((( PhotoViewController )
-						controller).getImageName());
+
+				AddPhotoToAlbum copyPhotoToAlbum = new AddPhotoToAlbum("Copy Photo to Album");
+				copyPhotoToAlbum.setPhotoName((( PhotoViewController ) controller).getImageName());
 				copyPhotoToAlbum.setLabePhotoPath("Copy to Album:");
 				copyPhotoToAlbum.setCommandListener(controller);
-				Display.getDisplay(controller.getMidlet()).setCurrent(copyPhotoToAlbum);
+
+				finishCopyCommand(controller, copyPhotoToAlbum);
 
 				return true;
+			}
+
+			private void finishCopyCommand(AbstractController controller, AddPhotoToAlbum copyPhotoToAlbum) {
+				Display.getDisplay(controller.getMidlet()).setCurrent(copyPhotoToAlbum);
 			}
 		}
 	}
@@ -31,12 +35,12 @@ delta dCopyPhoto {
 
 	modifies lancs.mobilemedia.core.ui.controller.PhotoController {
 
-		modifies includeOtherOperations(String name, PhotoViewScreen canvas) {
-
-			PhotoViewController controller = new PhotoViewController(getMidlet(),
-				getAlbumData(), getAlbumListScreen(), name);
-			controller.setNextController(this);
+		modifies extendedOperations(String name, PhotoViewScreen canvas, AbstractController nextController) {
+			PhotoViewController controller = new PhotoViewController(this.getMidlet(),
+				this.getAlbumData(), this.getAlbumListScreen(), name);
+			controller.setNextController(nextController);
 			canvas.setCommandListener(controller);
+			original(name, canvas, controller);
 		}
 	}
 
@@ -70,48 +74,44 @@ delta dCopyPhoto {
 
 			public boolean execute(AbstractController controller) {
 				try {
-					ImageData imageData = null;
-
-					try {
-						imageData = controller.getAlbumData().getImageInfo(((
-								PhotoViewController ) controller).getImageName());
-					}
-					catch(ImageNotFoundException e) {
-						e.printStackTrace();
-					}
-					catch(NullAlbumDataReference e) {
-						e.printStackTrace();
-					}
-					String photoname =(( AddPhotoToAlbum )
-						controller.getCurrentScreen()).getPhotoName();
-					String albumname =(( AddPhotoToAlbum )
-						controller.getCurrentScreen()).getPath();
-					controller.getAlbumData().addImageData(photoname, imageData, albumname);
-
+					String photoname = ( (AddPhotoToAlbum) controller.getCurrentScreen() ).getPhotoName();
+					String albumname = ( (AddPhotoToAlbum) controller.getCurrentScreen() ).getPath();
+					addImageDataToAlbum(controller, photoname, albumname);
 				}
-				catch(InvalidImageDataException e) {
+				catch (InvalidImageDataException e) {
 					Alert alert = null;
-					if(e instanceof ImagePathNotValidException) alert = new Alert("Error",
-						"The path is not valid", null, AlertType.ERROR);
-					else alert = new Alert("Error", "The image file format is not valid",
-						null, AlertType.ERROR);
-					Display.getDisplay(controller.getMidlet()).setCurrent(alert,
-						Display.getDisplay(controller.getMidlet()).getCurrent());
+					if(e instanceof ImagePathNotValidException) alert = new Alert("Error", "The path is not valid", null, AlertType.ERROR);
+					else alert = new Alert("Error", "The image file format is not valid", null, AlertType.ERROR);
+					Display.getDisplay(controller.getMidlet()).setCurrent(alert, Display.getDisplay(controller.getMidlet()).getCurrent());
 					return true;
 				}
 				catch(PersistenceMechanismException e) {
 					Alert alert = null;
 					if(e.getCause() instanceof RecordStoreFullException) alert = new
 					Alert("Error", "The mobile database is full", null, AlertType.ERROR);
-					else alert = new Alert("Error",
-						"The mobile database can not add a new photo", null, AlertType.ERROR);
-					Display.getDisplay(controller.getMidlet()).setCurrent(alert,
-						Display.getDisplay(controller.getMidlet()).getCurrent());
-				}(( PhotoController )
-					controller.getNextController()).showImageList(ScreenSingleton.getInstance().getCurrentStoreName());
+					else alert = new Alert("Error", "The mobile database can not add a new photo", null, AlertType.ERROR);
+					Display.getDisplay(controller.getMidlet()).setCurrent(alert, Display.getDisplay(controller.getMidlet()).getCurrent());
+				}
+
+				( (PhotoController) controller.getNextController() ).showImageList(ScreenSingleton.getInstance().getCurrentStoreName());
 				ScreenSingleton.getInstance().setCurrentScreenName(Constants.IMAGELIST_SCREEN);
 
 				return true;
+			}
+
+			private void addImageDataToAlbum(AbstractController controller, String photoname, String albumname)
+					throws InvalidImageDataException, PersistenceMechanismException {
+
+				ImageData imageData = null;
+				try {
+					imageData = controller.getAlbumData().getImageInfo(((PhotoViewController) controller).getImageName());
+				} catch (ImageNotFoundException e) {
+					e.printStackTrace();
+				} catch (NullAlbumDataReference e) {
+					e.printStackTrace();
+				}
+
+				controller.getAlbumData().addImageData(photoname, imageData, albumname);
 			}
 		}
 	}
@@ -120,17 +120,16 @@ delta dCopyPhoto {
 
 	modifies lancs.mobilemedia.core.ui.datamodel.AlbumData {
 
-		adds public void addImageData(String photoname, ImageData imageData, String
-			albumname) throws InvalidImageDataException, PersistenceMechanismException
-		{
+		adds public void addImageData(String photoname, ImageData imageData, String albumname)
+				throws InvalidImageDataException, PersistenceMechanismException {
+
 			imageAccessor.addImageData(photoname, imageData, albumname);
 		}
 	}
 
 	modifies lancs.mobilemedia.core.ui.datamodel.ImageAccessor {
-		adds public void addImageData(String photoname, ImageData imageData, String
-			albumname) throws InvalidImageDataException, PersistenceMechanismException
-		{
+		adds public void addImageData(String photoname, ImageData imageData, String albumname)
+				throws InvalidImageDataException, PersistenceMechanismException {
 			try {
 				imageRS = RecordStore.openRecordStore(ALBUM_LABEL + albumname, true);
 				imageInfoRS = RecordStore.openRecordStore(INFO_LABEL + albumname, true);
