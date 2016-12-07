@@ -4,13 +4,16 @@ delta dFavorites {
 
 	modifies lancs.mobilemedia.core.ui.controller.BaseController {
 
-		adds public static final int SHOW_IMAGE_LIST_FAVORITES_MODE = 3;
-
 		modifies initCommandsMap() {
 			original();
 			commands.put("Set Favorite", new SetFavorite());
 			commands.put("View Favorites", new ViewFavorites());
 		}
+	}
+
+	modifies lancs.mobilemedia.core.ui.controller.PhotoListController {
+
+		adds public static final int SHOW_IMAGE_LIST_FAVORITES_MODE = 3; //used as showImageList parameter
 
 		modifies fillImageList(PhotoListScreen imageList, ImageData [] images, int
 			imageListMode) {
@@ -37,18 +40,21 @@ delta dFavorites {
 		import javax.microedition.lcdui.AlertType;
 		import javax.microedition.lcdui.Display;
 
+		import lancs.mobilemedia.core.ui.datamodel.AlbumData;
 		import lancs.mobilemedia.core.ui.datamodel.ImageData;
 		import lancs.mobilemedia.lib.exceptions.ImageNotFoundException;
 		import lancs.mobilemedia.lib.exceptions.NullAlbumDataReference;
 
 		public class SetFavorite implements ControllerCommandInterface {
 
-			public boolean execute(BaseController controller) {
-				String selectedImageName = controller.getSelectedImageName();
+			public boolean execute(AbstractController controller) {
+				String selectedImageName =(( PhotoController )
+					controller).getSelectedImageName();
 				try {
-					ImageData image = controller.getModel().getImageInfo(selectedImageName);
-					image.toggleFavorite();
-					controller.updateImage(image);
+					ImageData image =
+					controller.getAlbumData().getImageInfo(selectedImageName);
+					image.toggleFavorite();(( PhotoController )
+						controller).updateImage(image);
 					System.out.println("<* BaseController.handleCommand() *> Image = " +
 						selectedImageName + "; Favorite = " + image.isFavorite());
 				}
@@ -60,7 +66,7 @@ delta dFavorites {
 						Display.getDisplay(controller.getMidlet()).getCurrent());
 				}
 				catch(NullAlbumDataReference e) {
-					controller.createNewAlbumData();
+					controller.setAlbumData(new AlbumData());
 					Alert alert = new Alert("Error",
 						"The operation is not available. Try again later !", null,
 						AlertType.ERROR);
@@ -79,10 +85,11 @@ delta dFavorites {
 
 		public class ViewFavorites implements ControllerCommandInterface {
 
-			public boolean execute(BaseController controller) {
-				controller.showImageList(controller.getCurrentStoreName(),
-					BaseController.SHOW_IMAGE_LIST_FAVORITES_MODE);
-				controller.setCurrentScreenName(Constants.IMAGELIST_SCREEN);
+			public boolean execute(AbstractController controller) {((
+					PhotoListController )
+					controller).showImageList(controller.getCurrentStoreName(),
+					PhotoListController.SHOW_IMAGE_LIST_FAVORITES_MODE);
+				ScreenSingleton.getInstance().setCurrentScreenName(Constants.IMAGELIST_SCREEN);
 				return true;
 			}
 		}
@@ -150,11 +157,6 @@ delta dFavorites {
 			else byteString = byteString.concat("false");
 
 			return byteString;
-		}
-
-		adds protected void concatByteStringFavorite(ImageData ii, String
-			byteString, String delimiter) {
-
 		}
 	}
 }

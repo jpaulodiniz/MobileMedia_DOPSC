@@ -1,0 +1,173 @@
+delta dCopyPhoto {
+
+//package lancs.mobilemedia.core.ui.controller.commands
+//package lancs.mobilemedia.core.ui.controller
+
+	adds {
+	//package lancs.mobilemedia.core.ui.controller.commands
+		package lancs.mobilemedia.core.ui.controller;
+
+		import javax.microedition.lcdui.Display;
+		import lancs.mobilemedia.core.ui.screens.AddPhotoToAlbum;
+		import lancs.mobilemedia.core.ui.controller.ControllerCommandInterface;
+
+		public class CopyPhoto implements ControllerCommandInterface {
+
+			public boolean execute(AbstractController controller) {
+				AddPhotoToAlbum copyPhotoToAlbum = new
+				AddPhotoToAlbum("Copy Photo to Album");
+				copyPhotoToAlbum.setPhotoName((( PhotoViewController )
+						controller).getImageName());
+				copyPhotoToAlbum.setLabePhotoPath("Copy to Album:");
+				copyPhotoToAlbum.setCommandListener(controller);
+				Display.getDisplay(controller.getMidlet()).setCurrent(copyPhotoToAlbum);
+
+				return true;
+			}
+		}
+	}
+
+	//package lancs.mobilemedia.core.ui.controller
+
+	modifies lancs.mobilemedia.core.ui.controller.PhotoController {
+
+		modifies includeOtherOperations(String name, PhotoViewScreen canvas) {
+
+			PhotoViewController controller = new PhotoViewController(getMidlet(),
+				getAlbumData(), getAlbumListScreen(), name);
+			controller.setNextController(this);
+			canvas.setCommandListener(controller);
+		}
+	}
+
+	modifies lancs.mobilemedia.core.ui.controller.PhotoViewController {
+
+		modifies initCommandsMap() {
+			original();
+			commands.put("Copy", new CopyPhoto());
+			commands.put("Save Photo", new SaveCopiedPhoto());
+		}
+	}
+
+	adds {
+		package lancs.mobilemedia.core.ui.controller;
+
+		import javax.microedition.lcdui.Alert;
+		import javax.microedition.lcdui.AlertType;
+		import javax.microedition.lcdui.Display;
+		import javax.microedition.rms.RecordStoreFullException;
+
+		import lancs.mobilemedia.core.ui.datamodel.ImageData;
+		import lancs.mobilemedia.core.ui.screens.AddPhotoToAlbum;
+		import lancs.mobilemedia.core.util.Constants;
+		import lancs.mobilemedia.lib.exceptions.ImageNotFoundException;
+		import lancs.mobilemedia.lib.exceptions.ImagePathNotValidException;
+		import lancs.mobilemedia.lib.exceptions.InvalidImageDataException;
+		import lancs.mobilemedia.lib.exceptions.NullAlbumDataReference;
+		import lancs.mobilemedia.lib.exceptions.PersistenceMechanismException;
+
+		public class SaveCopiedPhoto implements ControllerCommandInterface {
+
+			public boolean execute(AbstractController controller) {
+				try {
+					ImageData imageData = null;
+
+					try {
+						imageData = controller.getAlbumData().getImageInfo(((
+								PhotoViewController ) controller).getImageName());
+					}
+					catch(ImageNotFoundException e) {
+						e.printStackTrace();
+					}
+					catch(NullAlbumDataReference e) {
+						e.printStackTrace();
+					}
+					String photoname =(( AddPhotoToAlbum )
+						controller.getCurrentScreen()).getPhotoName();
+					String albumname =(( AddPhotoToAlbum )
+						controller.getCurrentScreen()).getPath();
+					controller.getAlbumData().addImageData(photoname, imageData, albumname);
+
+				}
+				catch(InvalidImageDataException e) {
+					Alert alert = null;
+					if(e instanceof ImagePathNotValidException) alert = new Alert("Error",
+						"The path is not valid", null, AlertType.ERROR);
+					else alert = new Alert("Error", "The image file format is not valid",
+						null, AlertType.ERROR);
+					Display.getDisplay(controller.getMidlet()).setCurrent(alert,
+						Display.getDisplay(controller.getMidlet()).getCurrent());
+					return true;
+				}
+				catch(PersistenceMechanismException e) {
+					Alert alert = null;
+					if(e.getCause() instanceof RecordStoreFullException) alert = new
+					Alert("Error", "The mobile database is full", null, AlertType.ERROR);
+					else alert = new Alert("Error",
+						"The mobile database can not add a new photo", null, AlertType.ERROR);
+					Display.getDisplay(controller.getMidlet()).setCurrent(alert,
+						Display.getDisplay(controller.getMidlet()).getCurrent());
+				}(( PhotoController )
+					controller.getNextController()).showImageList(ScreenSingleton.getInstance().getCurrentStoreName());
+				ScreenSingleton.getInstance().setCurrentScreenName(Constants.IMAGELIST_SCREEN);
+
+				return true;
+			}
+		}
+	}
+
+	//package lancs.mobilemedia.core.ui.datamodel
+
+	modifies lancs.mobilemedia.core.ui.datamodel.AlbumData {
+
+		adds public void addImageData(String photoname, ImageData imageData, String
+			albumname) throws InvalidImageDataException, PersistenceMechanismException
+		{
+			imageAccessor.addImageData(photoname, imageData, albumname);
+		}
+	}
+
+	modifies lancs.mobilemedia.core.ui.datamodel.ImageAccessor {
+		adds public void addImageData(String photoname, ImageData imageData, String
+			albumname) throws InvalidImageDataException, PersistenceMechanismException
+		{
+			try {
+				imageRS = RecordStore.openRecordStore(ALBUM_LABEL + albumname, true);
+				imageInfoRS = RecordStore.openRecordStore(INFO_LABEL + albumname, true);
+				int rid2;
+				ImageUtil converter = new ImageUtil();
+				rid2 = imageInfoRS.getNextRecordID();
+				imageData.setRecordId(rid2);
+				byte [] data1 = converter.getBytesFromImageInfo(imageData);
+				imageInfoRS.addRecord(data1, 0, data1.length);
+			}
+			catch(RecordStoreException e) {
+				throw new PersistenceMechanismException();
+			}
+			finally {
+				try {
+					imageRS.closeRecordStore();
+					imageInfoRS.closeRecordStore();
+				}
+				catch(RecordStoreNotOpenException e) {
+					e.printStackTrace();
+				}
+				catch(RecordStoreException e) {
+					e.printStackTrace();
+				}
+			}
+		}
+	}
+
+	//package lancs.mobilemedia.core.ui.screens
+
+	modifies lancs.mobilemedia.core.ui.screens.PhotoViewScreen {
+		adds public static final Command copyCommand = new Command("Copy",
+			Command.ITEM, 1);
+
+		modifies initMenu() {
+			original();
+			this.addCommand(copyCommand);
+		}
+	}
+}

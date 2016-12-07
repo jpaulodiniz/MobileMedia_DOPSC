@@ -2,23 +2,20 @@ delta dSorting {
 
 //package lancs.mobilemedia.core.ui.controller
 
-	modifies lancs.mobilemedia.core.ui.controller.BaseController {
+	modifies lancs.mobilemedia.core.ui.controller.PhotoController {
 
 	//adds import lancs.mobilemedia.core.ui.controller.commands.SortByViews;
 		adds import lancs.mobilemedia.core.ui.controller.SortByViews;
-
-		adds public static final int SHOW_IMAGE_LIST_SORTING_MODE = 2;
 
 		modifies initCommandsMap() {
 			original();
 			commands.put("Sort by Views", new SortByViews());
 		}
+	}
 
-		adds private void exchange(ImageData [] images, int pos1, int pos2) {
-			ImageData tmp = images[pos1];
-			images[pos1] = images[pos2];
-			images[pos2] = tmp;
-		}
+	modifies lancs.mobilemedia.core.ui.controller.PhotoListController {
+
+		adds public static final int SHOW_IMAGE_LIST_SORTING_MODE = 2; //used as showImageList parameter
 
 		adds public void bubbleSort(ImageData [] images) {
 		//System.out.print("Sorting by BubbleSort...");
@@ -32,14 +29,19 @@ delta dSorting {
 			//System.out.println("done.");
 		}
 
-		modifies fillImageList(PhotoListScreen imageList, ImageData [] images, int
-			imageListMode) {
+		adds private void exchange(ImageData [] images, int pos1, int pos2) {
+			ImageData tmp = images[pos1];
+			images[pos1] = images[pos2];
+			images[pos2] = tmp;
+		}
+
+		modifies fillImageList(PhotoListScreen imageList, ImageData [] images, int imageListMode) {
 
 			if(imageListMode == SHOW_IMAGE_LIST_SORTING_MODE) {
 				bubbleSort(images);
 			}
 
-			original(imageList, images, SHOW_IMAGE_LIST_DEFAULT_MODE);
+			original(imageList, images, imageListMode);
 		}
 	}
 
@@ -51,15 +53,14 @@ delta dSorting {
 		package lancs.mobilemedia.core.ui.controller;
 
 		import lancs.mobilemedia.core.util.Constants;
-		import lancs.mobilemedia.core.ui.controller.BaseController;
 		import lancs.mobilemedia.core.ui.controller.ControllerCommandInterface;
 
 		public class SortByViews implements ControllerCommandInterface {
 
-			public boolean execute(BaseController controller) {
-				controller.showImageList(controller.getCurrentStoreName(),
-					BaseController.SHOW_IMAGE_LIST_SORTING_MODE);
-				controller.setCurrentScreenName(Constants.IMAGELIST_SCREEN);
+			public boolean execute(AbstractController controller) {
+				((PhotoListController )	controller).showImageList(controller.getCurrentStoreName(),
+						PhotoListController.SHOW_IMAGE_LIST_SORTING_MODE);
+				ScreenSingleton.getInstance().setCurrentScreenName(Constants.IMAGELIST_SCREEN);
 				return true;
 			}
 		}
@@ -71,39 +72,38 @@ delta dSorting {
 		adds import javax.microedition.lcdui.AlertType;
 		adds import javax.microedition.lcdui.Display;
 
+		adds import lancs.mobilemedia.core.ui.datamodel.AlbumData;
 		adds import lancs.mobilemedia.core.ui.datamodel.ImageData;
 		adds import lancs.mobilemedia.lib.exceptions.ImageNotFoundException;
 		adds import lancs.mobilemedia.lib.exceptions.NullAlbumDataReference;
 
-		adds protected void increasePhotoNumberOfViews(BaseController controller,
-			String selectedImageName) {
+		adds protected void increasePhotoNumberOfViews(AbstractController controller,
+				String selectedImageName) {
 
 			try {
-				ImageData image = controller.getModel().getImageInfo(selectedImageName);
+				ImageData image = controller.getAlbumData().getImageInfo(selectedImageName);
 				image.increaseNumberOfViews();
-				controller.updateImage(image);
-				System.out.println("<* BaseController.handleCommand() *> Image = " +
-					selectedImageName + "; # views = " + image.getNumberOfViews());
+				(( PhotoController ) controller).updateImage(image);
+				System.out.println("<* AbstractController.handleCommand() *> Image = " +
+						selectedImageName + "; # views = " + image.getNumberOfViews());
 			}
 			catch(ImageNotFoundException e) {
-				Alert alert = new Alert("Error",
-					"The selected photo was not found in the mobile device", null,
-					AlertType.ERROR);
+				Alert alert = new Alert("Error", "The selected photo was not found in the mobile device",
+						null, AlertType.ERROR);
 				Display.getDisplay(controller.getMidlet()).setCurrent(alert,
-					Display.getDisplay(controller.getMidlet()).getCurrent());
+						Display.getDisplay(controller.getMidlet()).getCurrent());
 			}
 			catch(NullAlbumDataReference e) {
-				controller.createNewAlbumData();
-				Alert alert = new Alert("Error",
-					"The operation is not available. Try again later !", null,
-					AlertType.ERROR);
+				controller.setAlbumData(new AlbumData());
+				Alert alert = new Alert("Error", "The operation is not available. Try again later !",
+						null, AlertType.ERROR);
 				Display.getDisplay(controller.getMidlet()).setCurrent(alert,
-					Display.getDisplay(controller.getMidlet()).getCurrent());
+						Display.getDisplay(controller.getMidlet()).getCurrent());
 			}
 		}
 
-		modifies execute(BaseController controller) {
-			increasePhotoNumberOfViews(controller, controller.getSelectedImageName());
+		modifies execute(AbstractController controller) {
+			increasePhotoNumberOfViews(controller, ((PhotoController) controller).getSelectedImageName());
 			return original(controller);
 		}
 	}
@@ -131,8 +131,7 @@ delta dSorting {
 
 	modifies lancs.mobilemedia.core.ui.screens.PhotoListScreen {
 
-		adds public static final Command sortCommand = new Command("Sort by Views",
-			Command.ITEM, 1);
+		adds public static final Command sortCommand = new Command("Sort by Views", Command.ITEM, 1);
 
 		modifies initMenu() {
 			original();

@@ -26,7 +26,10 @@ delta cBase {
 		import javax.microedition.midlet.MIDlet;
 		import javax.microedition.midlet.MIDletStateChangeException;
 
+		import lancs.mobilemedia.core.ui.controller.AlbumController;
 		import lancs.mobilemedia.core.ui.controller.BaseController;
+		import lancs.mobilemedia.core.ui.controller.PhotoListController;
+		import lancs.mobilemedia.core.ui.screens.AlbumListScreen;
 		import lancs.mobilemedia.core.ui.datamodel.AlbumData;
 
 		public class MainUIMidlet extends MIDlet {
@@ -40,7 +43,16 @@ delta cBase {
 
 			public void startApp() throws MIDletStateChangeException {
 				model = new AlbumData();
-				rootController = new BaseController(this, model);
+				AlbumListScreen album = new AlbumListScreen();
+				rootController = new BaseController(this, model, album);
+
+				PhotoListController photoListController = new PhotoListController(this,
+					model, album);
+				photoListController.setNextController(rootController);
+
+				AlbumController albumController = new AlbumController(this, model, album);
+				albumController.setNextController(photoListController);
+				album.setCommandListener(albumController);
 				rootController.init(model);
 			}
 
@@ -51,7 +63,6 @@ delta cBase {
 				notifyDestroyed();
 			}
 		}
-
 	}
 
 	//package lancs.mobilemedia.core.ui.controller
@@ -59,113 +70,45 @@ delta cBase {
 	adds {
 		package lancs.mobilemedia.core.ui.controller;
 
-		import lancs.mobilemedia.core.util.Constants;
-		import lancs.mobilemedia.core.ui.screens.AddPhotoToAlbum;
-
-		public class AddPhoto implements ControllerCommandInterface {
-
-			public boolean execute(BaseController controller) {
-				controller.setCurrentScreenName(Constants.ADDPHOTOTOALBUM_SCREEN);
-				AddPhotoToAlbum form = new AddPhotoToAlbum("Add new Photo to Album");
-				form.setCommandListener(controller);
-				controller.setCurrentScreen(form);
-				return true;
-			}
-		}
-	}
-
-	adds {
-		package lancs.mobilemedia.core.ui.controller;
-
-		import java.util.Hashtable;
-
+		import java.util.HashMap;
+		import java.util.Map;
 		import javax.microedition.lcdui.Alert;
-		import javax.microedition.lcdui.AlertType;
 		import javax.microedition.lcdui.Command;
 		import javax.microedition.lcdui.CommandListener;
 		import javax.microedition.lcdui.Display;
 		import javax.microedition.lcdui.Displayable;
-		import javax.microedition.lcdui.Image;
-		import javax.microedition.lcdui.List;
-		import javax.microedition.rms.RecordStoreFullException;
 
 		import lancs.mobilemedia.core.ui.MainUIMidlet;
 		import lancs.mobilemedia.core.ui.datamodel.AlbumData;
-		import lancs.mobilemedia.core.ui.datamodel.ImageData;
 		import lancs.mobilemedia.core.ui.screens.AlbumListScreen;
-		import lancs.mobilemedia.core.ui.screens.PhotoListScreen;
-		import lancs.mobilemedia.core.ui.screens.PhotoViewScreen;
-		import lancs.mobilemedia.core.util.Constants;
-		import lancs.mobilemedia.lib.exceptions.ImageNotFoundException;
-		import lancs.mobilemedia.lib.exceptions.InvalidImageDataException;
-		import lancs.mobilemedia.lib.exceptions.PersistenceMechanismException;
-		import lancs.mobilemedia.lib.exceptions.UnavailablePhotoAlbumException;
 
-		public class BaseController implements CommandListener, ControllerInterface {
-
-			public static final int SHOW_IMAGE_LIST_DEFAULT_MODE = 1;
+		public abstract class AbstractController implements CommandListener,
+		ControllerInterface {
 
 			private MainUIMidlet midlet;
-			private Display display;
-			private AlbumData model;
-			private BaseController nextController;
+
+			private AlbumData albumData;
+
+			private ControllerInterface nextController;
+
 			private AlbumListScreen albumListScreen;
-			private String currentScreenName;
-			private String currentStoreName = "My Photo Album";
-			protected Hashtable commands;
-			private ControllerCommandInterface command;
 
-			public BaseController(MainUIMidlet midlet) {
-				super();
+			protected Map commands;
+
+			protected ControllerCommandInterface command;
+
+			public AbstractController(MainUIMidlet midlet, AlbumData albumData,
+				AlbumListScreen albumListScreen) {
 				this.midlet = midlet;
+				this.albumData = albumData;
+				this.albumListScreen = albumListScreen;
+				commands = new HashMap();
 				initCommandsMap();
 			}
 
-			public BaseController(MainUIMidlet midlet, AlbumData model) {
-				super();
-				this.midlet = midlet;
-				this.model = model;
-				initCommandsMap();
-			}
+			public abstract void initCommandsMap();
 
-			public void initCommandsMap() {
-				commands = new Hashtable();
-				commands.put("Exit", new DestroyApp());
-				commands.put("Back", new GoToPreviousScreen());
-				commands.put("Cancel", new GoToPreviousScreen());
-				commands.put("Reset", new ResetAlbum());
-				commands.put("Select", new SelectAlbum());
-				commands.put("New Photo Album", new NewAlbum());
-				commands.put("Save", new SaveAlbum());
-				commands.put("Delete Album", new DeleteAlbum());
-				commands.put("Yes - Delete", new ConfirmDeleteAlbum());
-				commands.put("No - Delete", new GoToPreviousScreen());
-				commands.put("Add", new AddPhoto());
-				commands.put("Save Add Photo", new SaveAddedPhoto());
-				commands.put("Delete", new DeletePhoto());
-				commands.put("Edit Label", new EditPhotoLabel());
-			}
-
-			public void init(AlbumData model) {
-				display = Display.getDisplay(midlet);
-
-				albumListScreen = new AlbumListScreen();
-
-				String [] albumNames = model.getAlbumNames();
-				for(int i = 0; i < albumNames.length; i ++) {
-					if(albumNames[i] != null) {
-						albumListScreen.append(albumNames[i], null);
-					}
-				}
-
-				albumListScreen.initMenu();
-				albumListScreen.setCommandListener(this);
-
-				setCurrentScreen(albumListScreen);
-				currentScreenName = Constants.ALBUMLIST_SCREEN;
-			}
-
-			public boolean handleCommand(Command c, Displayable d) {
+			public boolean handleCommand(Command c) {
 
 				String label = c.getLabel();
 				System.out.println(this.getClass().getName() + "::handleCommand: " + label);
@@ -178,29 +121,120 @@ delta cBase {
 				return false;
 			}
 
-			public void postCommand(Command c, Displayable d) {
+			public void postCommand(Command c) {
+				System.out.println("AbstractController::postCommand - Current controller is: " + this.getClass().getName());
 
-				System.out.println("BaseController::postCommand - Current controller is: " + this.getClass().getName());
-
-				if(handleCommand(c, d) == false) {
-					BaseController next = getNextController();
+				if(handleCommand(c) == false) {
+					ControllerInterface next = getNextController();
 					if(next != null) {
 						System.out.println("Passing to next controller in chain: " + next.getClass().getName());
-						next.postCommand(c, d);
+						next.postCommand(c);
 					}
 					else {
-						System.out.println("BaseController::postCommand - Reached top of chain. No more handlers for command: " + c.getLabel());
+						System.out.println("AbstractController::postCommand - Reached top of chain. No more handlers for command: " + command);
 					}
 				}
 			}
 
 			public void commandAction(Command c, Displayable d) {
-				postCommand(c, d);
+				postCommand(c);
 			}
 
-			public void resetImageData() {
+			public void setAlbumListAsCurrentScreen(Alert a) {
+				setCurrentScreen(a, albumListScreen);
+			}
+
+			public void setCurrentScreen(Alert a, Displayable d) {
+				Display.getDisplay(midlet).setCurrent(a, d);
+			}
+
+			public Displayable getCurrentScreen() {
+				return Display.getDisplay(midlet).getCurrent();
+			}
+
+			public void setCurrentScreen(Displayable d) {
+				Display.getDisplay(midlet).setCurrent(d);
+			}
+
+			public AlbumData getAlbumData() {
+				return albumData;
+			}
+
+			public void setAlbumData(AlbumData albumData) {
+				this.albumData = albumData;
+			}
+
+			public ControllerInterface getNextController() {
+				return nextController;
+			}
+
+			public void setNextController(ControllerInterface nextController) {
+				this.nextController = nextController;
+			}
+
+			public String getCurrentStoreName() {
+				return ScreenSingleton.getInstance().getCurrentStoreName();
+			}
+
+			public AlbumListScreen getAlbumListScreen() {
+				return albumListScreen;
+			}
+
+			protected MainUIMidlet getMidlet() {
+				return midlet;
+			}
+		}
+	}
+
+	adds {
+		package lancs.mobilemedia.core.ui.controller;
+
+		import lancs.mobilemedia.core.util.Constants;
+		import lancs.mobilemedia.core.ui.screens.AddPhotoToAlbum;
+
+		public class AddPhoto implements ControllerCommandInterface {
+
+			public boolean execute(AbstractController controller) {
+				ScreenSingleton.getInstance().setCurrentScreenName(Constants.ADDPHOTOTOALBUM_SCREEN);
+				AddPhotoToAlbum form = new AddPhotoToAlbum("Add new Photo to Album");
+				form.setCommandListener(controller);
+				controller.setCurrentScreen(form);
+				return true;
+			}
+		}
+	}
+
+	adds {
+		package lancs.mobilemedia.core.ui.controller;
+
+		import java.util.HashMap;
+		import javax.microedition.lcdui.Alert;
+		import javax.microedition.lcdui.AlertType;
+		import javax.microedition.lcdui.Display;
+		import javax.microedition.rms.RecordStoreFullException;
+
+		import lancs.mobilemedia.core.ui.MainUIMidlet;
+		import lancs.mobilemedia.core.ui.datamodel.AlbumData;
+		import lancs.mobilemedia.core.ui.screens.AlbumListScreen;
+		import lancs.mobilemedia.core.util.Constants;
+		import lancs.mobilemedia.lib.exceptions.PersistenceMechanismException;
+
+		public class AlbumController extends AbstractController {
+
+			public AlbumController(MainUIMidlet midlet, AlbumData albumData,
+				AlbumListScreen albumListScreen) {
+				super(midlet, albumData, albumListScreen);
+			}
+
+			public void initCommandsMap() {
+				commands = new HashMap();
+				commands.put("Reset", new ResetAlbum());
+				commands.put("Select", new SelectAlbum());
+			}
+
+			protected void resetImageData() {
 				try {
-					model.resetImageData();
+					getAlbumData().resetImageData();
 				}
 				catch(PersistenceMechanismException e) {
 					Alert alert = null;
@@ -208,88 +242,523 @@ delta cBase {
 					Alert("Error", "The mobile database is full", null, AlertType.ERROR);
 					else alert = new Alert("Error",
 						"It is not possible to reset the database", null, AlertType.ERROR);
-					Display.getDisplay(midlet).setCurrent(alert,
-						Display.getDisplay(midlet).getCurrent());
+					Display.getDisplay(getMidlet()).setCurrent(alert,
+						Display.getDisplay(getMidlet()).getCurrent());
 					return;
 				}
-				for(int i = 0; i < albumListScreen.size(); i ++) {
-					albumListScreen.delete(i);
+
+				for(int i = 0; i < getAlbumListScreen().size(); i ++) {
+					getAlbumListScreen().delete(i);
 				}
 
+				String [] albumNames = getAlbumData().getAlbumNames();
+				for(int i = 0; i < albumNames.length; i ++) {
+					if(albumNames[i] != null) {
+						getAlbumListScreen().append(albumNames[i], null);
+					}
+				}
+				setCurrentScreen(getAlbumListScreen());
+			}
+
+			protected void goToPreviousScreen() {
+				System.out.println("<* AlbumController.goToPreviousScreen() *>");
+				getAlbumListScreen().repaintListAlbum(getAlbumData().getAlbumNames());
+				setCurrentScreen(getAlbumListScreen());
+				ScreenSingleton.getInstance().setCurrentScreenName(Constants.ALBUMLIST_SCREEN);
+			}
+		}
+	}
+
+	adds {
+		package lancs.mobilemedia.core.ui.controller;
+
+		import java.util.HashMap;
+		import javax.microedition.lcdui.Command;
+
+		import lancs.mobilemedia.core.ui.MainUIMidlet;
+		import lancs.mobilemedia.core.ui.datamodel.AlbumData;
+		import lancs.mobilemedia.core.ui.screens.AlbumListScreen;
+		import lancs.mobilemedia.core.util.Constants;
+
+		public class BaseController extends AbstractController {
+
+			public BaseController(MainUIMidlet midlet, AlbumData model, AlbumListScreen
+				albumListScreen) {
+				super(midlet, model, albumListScreen);
+			}
+
+			public void initCommandsMap() {
+				commands = new HashMap();
+				commands.put("Exit", new DestroyApp());
+				commands.put("Back", new GoToPreviousScreen());
+				commands.put("Cancel", new GoToPreviousScreen());
+				commands.put("New Photo Album", new NewAlbum());
+				commands.put("Save", new SaveAlbum());
+				commands.put("Delete Album", new DeleteAlbum());
+				commands.put("Yes - Delete", new ConfirmDeleteAlbum());
+				commands.put("No - Delete", new GoToPreviousScreen());
+			}
+
+			public void init(AlbumData model) {
 				String [] albumNames = model.getAlbumNames();
 				for(int i = 0; i < albumNames.length; i ++) {
 					if(albumNames[i] != null) {
-						albumListScreen.append(albumNames[i], null);
+						getAlbumListScreen().append(albumNames[i], null);
 					}
 				}
-				setCurrentScreen(albumListScreen);
+				getAlbumListScreen().initMenu();
+				setCurrentScreen(getAlbumListScreen());
 			}
 
-			public void setCurrentScreen(Displayable d) {
-				Display.getDisplay(midlet).setCurrent(d);
+			public boolean handleCommand(Command c) {
+
+				String label = c.getLabel();
+				System.out.println(this.getClass().getName() + "::handleCommand: " +
+					label);
+
+				command = ( ControllerCommandInterface ) commands.get(label);
+
+				if(command != null) {
+					return command.execute(this);
+				}
+				return false;
 			}
 
-			public void setCurrentScreen(Alert a, Displayable d) {
-				Display.getDisplay(midlet).setCurrent(a, d);
+			protected boolean goToPreviousScreen() {
+				System.out.println("<* AlbumController.goToPreviousScreen() *>");
+				String currentScreenName =
+				ScreenSingleton.getInstance().getCurrentScreenName();
+				if((currentScreenName.equals(Constants.IMAGELIST_SCREEN))
+					||(currentScreenName.equals(Constants.NEWALBUM_SCREEN))
+					||(currentScreenName.equals(Constants.CONFIRMDELETEALBUM_SCREEN))) {
+					getAlbumListScreen().repaintListAlbum(getAlbumData().getAlbumNames());
+					setCurrentScreen(getAlbumListScreen());
+					ScreenSingleton.getInstance().setCurrentScreenName(Constants.ALBUMLIST_SCREEN);
+					return true;
+				}
+
+				return false;
 			}
+		}
+	}
 
-			public Displayable getCurrentScreenName() {
-				return Display.getDisplay(midlet).getCurrent();
-			}
+	adds {
+		package lancs.mobilemedia.core.ui.controller;
 
-			public void goToPreviousScreen() {
+		public interface ControllerCommandInterface {
 
-				if(currentScreenName.equals(Constants.ALBUMLIST_SCREEN)) {
-					System.out.println("Can't go back here...Should never reach this spot");
-				}
-				else if(currentScreenName.equals(Constants.IMAGE_SCREEN)) {
-					showImageList(currentStoreName);
-					currentScreenName = Constants.IMAGELIST_SCREEN;
-				}
-				else if(currentScreenName.equals(Constants.IMAGELIST_SCREEN)) {
-					setCurrentScreen(albumListScreen);
-					currentScreenName = Constants.ALBUMLIST_SCREEN;
-				}
-				else if(currentScreenName.equals(Constants.NEWALBUM_SCREEN)) {
-					albumListScreen.repaintListAlbum(model.getAlbumNames());
-					setCurrentScreen(albumListScreen);
-					currentScreenName = Constants.ALBUMLIST_SCREEN;
-				}
-				else if(currentScreenName.equals(Constants.CONFIRMDELETEALBUM_SCREEN)) {
-					albumListScreen.repaintListAlbum(model.getAlbumNames());
-					setCurrentScreen(albumListScreen);
-					currentScreenName = Constants.ALBUMLIST_SCREEN;
-				}
-				else if(currentScreenName.equals(Constants.ADDPHOTOTOALBUM_SCREEN)) {
-					showImageList(currentStoreName);
-					currentScreenName = Constants.IMAGELIST_SCREEN;
-				}
-			}
+			public boolean execute(AbstractController controller);
+		}
+	}
 
-			public void showImage(String name) {
-				Image storedImage = null;
+	adds {
+		package lancs.mobilemedia.core.ui.controller;
+
+		import javax.microedition.lcdui.Alert;
+		import javax.microedition.lcdui.AlertType;
+		import javax.microedition.lcdui.Display;
+
+		import lancs.mobilemedia.lib.exceptions.PersistenceMechanismException;
+
+		public class ConfirmDeleteAlbum implements ControllerCommandInterface {
+
+			public boolean execute(AbstractController controller) {
 				try {
-					storedImage = model.getImageFromRecordStore(currentStoreName, name);
+					controller.getAlbumData().deletePhotoAlbum(ScreenSingleton.getInstance().getCurrentStoreName());
+				}
+				catch(PersistenceMechanismException e) {
+					Alert alert = new Alert("Error",
+						"The mobile database can not delete this photo album", null,
+						AlertType.ERROR);
+					Display.getDisplay(controller.getMidlet()).setCurrent(alert,
+						Display.getDisplay(controller.getMidlet()).getCurrent());
+				}(( AlbumController ) controller).goToPreviousScreen();
+				return true;
+			}
+		}
+	}
+
+	adds {
+		package lancs.mobilemedia.core.ui.controller;
+
+		import javax.microedition.lcdui.Command;
+
+		public interface ControllerInterface {
+
+			public void postCommand(Command c);
+
+			public boolean handleCommand(Command c);
+		}
+	}
+
+	adds {
+		package lancs.mobilemedia.core.ui.controller;
+
+		import javax.microedition.lcdui.Alert;
+		import javax.microedition.lcdui.AlertType;
+		import javax.microedition.lcdui.Command;
+		import javax.microedition.lcdui.Display;
+		import javax.microedition.lcdui.List;
+
+		import lancs.mobilemedia.core.util.Constants;
+
+		public class DeleteAlbum implements ControllerCommandInterface {
+
+			public boolean execute(AbstractController controller) {
+				System.out.println("Delete Photo Album here");
+				List down = ( List )
+				Display.getDisplay(controller.getMidlet()).getCurrent();
+				ScreenSingleton.getInstance().setCurrentScreenName(Constants.CONFIRMDELETEALBUM_SCREEN);
+				ScreenSingleton.getInstance().setCurrentStoreName(down.getString(down.getSelectedIndex()));
+				String message = "Would you like to remove the album " +
+				ScreenSingleton.getInstance().getCurrentStoreName();
+				Alert deleteConfAlert = new Alert("Delete Photo Album", message, null,
+					AlertType.CONFIRMATION);
+				deleteConfAlert.setTimeout(Alert.FOREVER);
+				deleteConfAlert.addCommand(new Command("Yes - Delete", Command.OK, 2));
+				deleteConfAlert.addCommand(new Command("No - Delete", Command.CANCEL, 2));
+				controller.setAlbumListAsCurrentScreen(deleteConfAlert);
+				deleteConfAlert.setCommandListener(controller);
+				return true;
+			}
+		}
+	}
+
+	adds {
+		package lancs.mobilemedia.core.ui.controller;
+
+		import javax.microedition.lcdui.Alert;
+		import javax.microedition.lcdui.AlertType;
+		import javax.microedition.lcdui.Display;
+
+		import lancs.mobilemedia.core.util.Constants;
+		import lancs.mobilemedia.lib.exceptions.ImageNotFoundException;
+		import lancs.mobilemedia.lib.exceptions.PersistenceMechanismException;
+
+		public class DeletePhoto implements ControllerCommandInterface {
+
+			public boolean execute(AbstractController controller) {
+				String selectedImageName =(( PhotoController )
+					controller).getSelectedImageName();
+				try {
+					controller.getAlbumData().deleteImage(controller.getCurrentStoreName(),
+						selectedImageName);
+				}
+				catch(PersistenceMechanismException e) {
+					Alert alert = new Alert("Error",
+						"The mobile database can not delete this photo", null, AlertType.ERROR);
+					Display.getDisplay(controller.getMidlet()).setCurrent(alert,
+						Display.getDisplay(controller.getMidlet()).getCurrent());
+					return true;
 				}
 				catch(ImageNotFoundException e) {
 					Alert alert = new Alert("Error",
 						"The selected photo was not found in the mobile device", null,
 						AlertType.ERROR);
-					Display.getDisplay(midlet).setCurrent(alert,
-						Display.getDisplay(midlet).getCurrent());
+					Display.getDisplay(controller.getMidlet()).setCurrent(alert,
+						Display.getDisplay(controller.getMidlet()).getCurrent());
+					return true;
+				}(( PhotoListController )
+					controller).showImageList(controller.getCurrentStoreName());
+				ScreenSingleton.getInstance().setCurrentScreenName(Constants.IMAGELIST_SCREEN);
+				return true;
+			}
+		}
+	}
+
+	adds {
+		package lancs.mobilemedia.core.ui.controller;
+
+		import lancs.mobilemedia.core.ui.controller.ControllerCommandInterface;
+
+		public class DestroyApp implements ControllerCommandInterface {
+
+			public boolean execute(AbstractController controller) {
+				controller.getMidlet().destroyApp(true);
+				return true;
+			}
+		}
+	}
+
+	adds {
+		package lancs.mobilemedia.core.ui.controller;
+
+		import javax.microedition.lcdui.Alert;
+		import javax.microedition.lcdui.AlertType;
+		import javax.microedition.lcdui.Display;
+
+		import lancs.mobilemedia.core.ui.datamodel.AlbumData;
+		import lancs.mobilemedia.core.ui.screens.NewLabelScreen;
+		import lancs.mobilemedia.lib.exceptions.ImageNotFoundException;
+		import lancs.mobilemedia.lib.exceptions.NullAlbumDataReference;
+
+		public class EditPhotoLabel implements ControllerCommandInterface {
+
+			public boolean execute(AbstractController controller) {
+				PhotoController photoController = ( PhotoController ) controller;
+				String selectedImageName = photoController.getSelectedImageName();
+
+				try {
+					photoController.updateImage(controller.getAlbumData().getImageInfo(selectedImageName));
+
+					NewLabelScreen formScreen = new NewLabelScreen("Edit Label Photo",
+						NewLabelScreen.LABEL_PHOTO);
+					formScreen.setCommandListener(controller);
+					photoController.setScreen(formScreen);
+					photoController.setCurrentScreen(formScreen);
+					formScreen = null;
+				}
+				catch(ImageNotFoundException e) {
+					Alert alert = new Alert("Error",
+						"The selected photo was not found in the mobile device", null,
+						AlertType.ERROR);
+					Display.getDisplay(controller.getMidlet()).setCurrent(alert,
+						Display.getDisplay(controller.getMidlet()).getCurrent());
+				}
+				catch(NullAlbumDataReference e) {
+					controller.setAlbumData(new AlbumData());
+					Alert alert = new Alert("Error",
+						"The operation is not available. Try again later !", null,
+						AlertType.ERROR);
+					Display.getDisplay(controller.getMidlet()).setCurrent(alert,
+						Display.getDisplay(controller.getMidlet()).getCurrent());
+				}
+				return true;
+			}
+		}
+	}
+
+	adds {
+		package lancs.mobilemedia.core.ui.controller;
+
+		public class GoToPreviousScreen implements ControllerCommandInterface {
+
+			public boolean execute(AbstractController controller) {(( BaseController )
+					controller).goToPreviousScreen();
+				return true;
+			}
+		}
+	}
+
+	adds {
+		package lancs.mobilemedia.core.ui.controller;
+
+		import lancs.mobilemedia.core.ui.screens.NewLabelScreen;
+		import lancs.mobilemedia.core.util.Constants;
+
+		public class NewAlbum implements ControllerCommandInterface {
+
+			public boolean execute(AbstractController controller) {
+
+				System.out.println("Create new Photo Album here");
+				System.out.println("Create new Photo Album here");
+				ScreenSingleton.getInstance().setCurrentScreenName(Constants.NEWALBUM_SCREEN);
+				NewLabelScreen canv = new NewLabelScreen("Add new Photo Album", NewLabelScreen.NEW_ALBUM);
+				canv.setCommandListener(controller);
+				controller.setCurrentScreen(canv);
+				canv = null;
+				return true;
+			}
+		}
+	}
+
+	adds {
+		package lancs.mobilemedia.core.ui.controller;
+
+		import lancs.mobilemedia.core.util.Constants;
+
+		public class ResetAlbum implements ControllerCommandInterface {
+
+			public boolean execute(AbstractController controller) {
+				System.out.println("<* BaseController.handleCommand() *> Reset Photo Album");
+				(( AlbumController ) controller).resetImageData();
+				ScreenSingleton.getInstance().setCurrentScreenName(Constants.ALBUMLIST_SCREEN);
+				return true;
+			}
+		}
+	}
+
+	adds {
+		package lancs.mobilemedia.core.ui.controller;
+
+		import javax.microedition.lcdui.Command;
+		import javax.microedition.lcdui.Alert;
+		import javax.microedition.lcdui.AlertType;
+		import javax.microedition.lcdui.Display;
+		import javax.microedition.lcdui.Image;
+		import javax.microedition.lcdui.List;
+		import java.util.HashMap;
+
+		import lancs.mobilemedia.core.ui.MainUIMidlet;
+		import lancs.mobilemedia.core.ui.datamodel.AlbumData;
+		import lancs.mobilemedia.core.ui.datamodel.ImageData;
+		import lancs.mobilemedia.core.ui.screens.AlbumListScreen;
+		import lancs.mobilemedia.core.ui.screens.NewLabelScreen;
+		import lancs.mobilemedia.core.ui.screens.PhotoViewScreen;
+		import lancs.mobilemedia.core.util.Constants;
+		import lancs.mobilemedia.lib.exceptions.ImageNotFoundException;
+		import lancs.mobilemedia.lib.exceptions.InvalidImageDataException;
+		import lancs.mobilemedia.lib.exceptions.PersistenceMechanismException;
+
+		public class PhotoController extends PhotoListController {
+
+			private ImageData image;
+			private NewLabelScreen screen;
+
+			public PhotoController(MainUIMidlet midlet, AlbumData albumData, AlbumListScreen albumListScreen) {
+				super(midlet, albumData, albumListScreen);
+			}
+
+			protected void includeOtherOperations(String name, PhotoViewScreen canvas) {
+				//TODO refactor - code FOP implementation
+			}
+
+			public void initCommandsMap() {
+				commands = new HashMap();
+				commands.put("Add", new AddPhoto());
+				commands.put("Save Photo", new SavePhoto());
+				commands.put("Delete", new DeletePhoto());
+				commands.put("Edit Label", new EditPhotoLabel());
+				commands.put("Save", new SavePhotoLabel());
+				commands.put("View", new ViewPhoto());
+			}
+
+			public boolean handleCommand(Command c) {
+
+				String label = c.getLabel();
+				System.out.println("<* PhotoController.handleCommand() *> " + label);
+
+				if(label.equals("Back")) {
+					return goToPreviousScreen();
+				}
+				else if(label.equals("Cancel")) {
+					return goToPreviousScreen();
+				}
+				else if(command != null) {
+					return command.execute(this);
+				}
+
+				return false;
+			}
+
+			void updateImage(ImageData image) {
+				try {
+					getAlbumData().updateImageInfo(image, image);
+				}
+				catch(InvalidImageDataException e) {
+					e.printStackTrace();
+				}
+				catch(PersistenceMechanismException e) {
+					e.printStackTrace();
+				}
+			}
+
+			public String getSelectedImageName() {
+				List selected = ( List ) Display.getDisplay(getMidlet()).getCurrent();
+				if(selected == null)
+					System.out.println("Current List from display is NULL!");
+
+				String name = selected.getString(selected.getSelectedIndex());
+				return name;
+			}
+
+			public void showImage(String name) {
+				Image storedImage = null;
+				try {
+					storedImage =
+					getAlbumData().getImageFromRecordStore(getCurrentStoreName(), name);
+				}
+				catch(ImageNotFoundException e) {
+					Alert alert = new Alert("Error",
+						"The selected photo was not found in the mobile device", null,
+						AlertType.ERROR);
+					Display.getDisplay(getMidlet()).setCurrent(alert,
+						Display.getDisplay(getMidlet()).getCurrent());
 					return;
 				}
 				catch(PersistenceMechanismException e) {
 					Alert alert = new Alert("Error",
 						"The mobile database can open this photo", null, AlertType.ERROR);
-					Display.getDisplay(midlet).setCurrent(alert,
-						Display.getDisplay(midlet).getCurrent());
+					Display.getDisplay(getMidlet()).setCurrent(alert,
+						Display.getDisplay(getMidlet()).getCurrent());
 					return;
 				}
 
 				PhotoViewScreen canv = new PhotoViewScreen(storedImage);
 				canv.setCommandListener(this);
+
+				includeOtherOperations(name, canv);
+
 				setCurrentScreen(canv);
+			}
+
+			protected boolean goToPreviousScreen() {
+			//System.out.println("<* PhotoController.goToPreviousScreen() *>");
+				String currentScreenName =
+				ScreenSingleton.getInstance().getCurrentScreenName();
+				if(currentScreenName.equals(Constants.ALBUMLIST_SCREEN)) {
+					System.out.println("Can't go back here...Should never reach this spot");
+				}
+				else if(currentScreenName.equals(Constants.IMAGE_SCREEN)) {
+					showImageList(getCurrentStoreName());
+					ScreenSingleton.getInstance().setCurrentScreenName(Constants.IMAGELIST_SCREEN);
+					return true;
+				}
+				else if(currentScreenName.equals(Constants.ADDPHOTOTOALBUM_SCREEN)) {
+					showImageList(getCurrentStoreName());
+					ScreenSingleton.getInstance().setCurrentScreenName(Constants.IMAGELIST_SCREEN);
+					return true;
+				}
+				return false;
+			}
+
+			public void setImage(ImageData image) {
+				this.image = image;
+			}
+
+			public ImageData getImage() {
+				return image;
+			}
+
+			public void setScreen(NewLabelScreen screen) {
+				this.screen = screen;
+			}
+
+			public NewLabelScreen getScreen() {
+				return screen;
+			}
+		}
+	}
+
+	adds {
+		package lancs.mobilemedia.core.ui.controller;
+
+		import java.util.HashMap;
+		import javax.microedition.lcdui.Alert;
+		import javax.microedition.lcdui.AlertType;
+		import javax.microedition.lcdui.Display;
+
+		import lancs.mobilemedia.core.ui.MainUIMidlet;
+		import lancs.mobilemedia.core.ui.datamodel.AlbumData;
+		import lancs.mobilemedia.core.ui.datamodel.ImageData;
+		import lancs.mobilemedia.core.ui.screens.AlbumListScreen;
+		import lancs.mobilemedia.core.ui.screens.PhotoListScreen;
+		import lancs.mobilemedia.lib.exceptions.UnavailablePhotoAlbumException;
+
+		public class PhotoListController extends AbstractController {
+
+			public static final int SHOW_IMAGE_LIST_DEFAULT_MODE = 1; //used as showImageList parameter
+
+			public PhotoListController(MainUIMidlet midlet, AlbumData albumData,
+				AlbumListScreen albumListScreen) {
+				super(midlet, albumData, albumListScreen);
+			}
+
+			public void initCommandsMap() {
+				commands = new HashMap();
+				commands.put("Select", new SelectAlbum());
+				commands.put("Add", new AddPhoto());
+				commands.put("Save Photo", new SavePhoto());
 			}
 
 			public void showImageList(String recordName) {
@@ -298,16 +767,20 @@ delta cBase {
 
 			public void showImageList(String recordName, int imageListMode) {
 
-				if(recordName == null) recordName = currentStoreName;
+				if(recordName == null) recordName = getCurrentStoreName();
+
+				PhotoController photoController = new PhotoController(getMidlet(),
+					getAlbumData(), getAlbumListScreen());
+				photoController.setNextController(this);
 
 				PhotoListScreen imageList = new PhotoListScreen();
+				imageList.setCommandListener(photoController);
 
 				imageList.initMenu();
-				imageList.setCommandListener(this);
 
 				ImageData [] images = null;
 				try {
-					images = model.getImages(recordName);
+					images = getAlbumData().getImages(recordName);
 				}
 				catch(UnavailablePhotoAlbumException e) {
 					Alert alert = new Alert("Error", "The list of photos can not be recovered", null, AlertType.ERROR);
@@ -332,418 +805,48 @@ delta cBase {
 					}
 				}
 			}
-
-			public String getSelectedImageName() {
-				if(display == null) {
-					System.out.println("BaseController::getSelectedImageName: Current display is NULL! Trying to get from Midlet");
-					display = Display.getDisplay(midlet);
-				}
-
-				List selected = ( List ) display.getCurrent();
-				if(selected == null)
-					System.out.println("Current List from display is NULL!");
-
-				String name = selected.getString(selected.getSelectedIndex());
-				return name;
-			}
-
-			protected AlbumData getModel() {
-				return model;
-			}
-
-			protected String getCurrentStoreName() {
-				return currentStoreName;
-			}
-
-			protected void setCurrentScreenName(String currentScreenNameParam) {
-				currentScreenName = currentScreenNameParam;
-			}
-
-			public BaseController getNextController() {
-				return nextController;
-			}
-
-			public void setNextController(BaseController nextControllerParam) {
-				nextController = nextControllerParam;
-			}
-
-			protected MainUIMidlet getMidlet() {
-				return midlet;
-			}
-
-			protected Display getDisplay() {
-				return display;
-			}
-
-			protected void setCurrentStoreName(String storeName) {
-				currentStoreName = storeName;
-			}
-
-			protected AlbumListScreen getAlbumListScreen() {
-				return albumListScreen;
-			}
-
-			public void createNewAlbumData() {
-				model = new AlbumData();
-			}
-
-			public void updateImage(ImageData image) {
-				try {
-					model.updateImageInfo(image, image);
-				}
-				catch(InvalidImageDataException e) {
-					e.printStackTrace();
-				}
-				catch(PersistenceMechanismException e) {
-					e.printStackTrace();
-				}
-			}
 		}
 	}
 
 	adds {
 		package lancs.mobilemedia.core.ui.controller;
 
-		public interface ControllerCommandInterface {
-
-			public boolean execute(BaseController controller);
-		}
-	}
-
-	adds {
-		package lancs.mobilemedia.core.ui.controller;
-
-		import javax.microedition.lcdui.Alert;
-		import javax.microedition.lcdui.AlertType;
-		import javax.microedition.lcdui.Display;
-
-		import lancs.mobilemedia.lib.exceptions.PersistenceMechanismException;
-
-		public class ConfirmDeleteAlbum implements ControllerCommandInterface {
-
-			public boolean execute(BaseController controller) {
-				try {
-					controller.getModel().deletePhotoAlbum(controller.getCurrentStoreName());
-				}
-				catch(PersistenceMechanismException e) {
-					Alert alert = new Alert("Error",
-						"The mobile database can not delete this photo album", null,
-						AlertType.ERROR);
-					Display.getDisplay(controller.getMidlet()).setCurrent(alert,
-						Display.getDisplay(controller.getMidlet()).getCurrent());
-				}
-				GoToPreviousScreen previousScreen = new GoToPreviousScreen();
-				return previousScreen.execute(controller);
-			}
-		}
-	}
-
-	adds {
-		package lancs.mobilemedia.core.ui.controller;
-
+		import java.util.HashMap;
 		import javax.microedition.lcdui.Command;
-		import javax.microedition.lcdui.Displayable;
 
-		public interface ControllerInterface {
+		import lancs.mobilemedia.core.ui.MainUIMidlet;
+		import lancs.mobilemedia.core.ui.datamodel.AlbumData;
+		import lancs.mobilemedia.core.ui.screens.AlbumListScreen;
 
-			public void postCommand(Command c, Displayable d);
+		public class PhotoViewController extends AbstractController {
 
-			public boolean handleCommand(Command c, Displayable d);
-		}
-	}
+			String imageName = "";
 
-	adds {
-		package lancs.mobilemedia.core.ui.controller;
-
-		import javax.microedition.lcdui.Alert;
-		import javax.microedition.lcdui.AlertType;
-		import javax.microedition.lcdui.Command;
-		import javax.microedition.lcdui.List;
-
-		import lancs.mobilemedia.core.util.Constants;
-
-		public class DeleteAlbum implements ControllerCommandInterface {
-
-			public boolean execute(BaseController controller) {
-				System.out.println("Delete Photo Album here");
-				List down = ( List ) controller.getDisplay().getCurrent();
-				controller.setCurrentScreenName(Constants.CONFIRMDELETEALBUM_SCREEN);
-				controller.setCurrentStoreName(down.getString(down.getSelectedIndex()));
-				Alert deleteConfAlert = new Alert("Delete Photo Album",
-					"Would you like to remove the album " + controller.getCurrentStoreName(),
-					null, AlertType.CONFIRMATION);
-				deleteConfAlert.setTimeout(Alert.FOREVER);
-				deleteConfAlert.addCommand(new Command("Yes - Delete", Command.OK, 2));
-				deleteConfAlert.addCommand(new Command("No - Delete", Command.CANCEL, 2));
-				controller.setCurrentScreen(deleteConfAlert,
-					controller.getAlbumListScreen());
-				deleteConfAlert.setCommandListener(controller);
-				return true;
-			}
-		}
-	}
-
-	adds {
-		package lancs.mobilemedia.core.ui.controller;
-
-		import javax.microedition.lcdui.Alert;
-		import javax.microedition.lcdui.AlertType;
-		import javax.microedition.lcdui.Display;
-
-		import lancs.mobilemedia.core.util.Constants;
-		import lancs.mobilemedia.lib.exceptions.ImageNotFoundException;
-		import lancs.mobilemedia.lib.exceptions.PersistenceMechanismException;
-
-		public class DeletePhoto implements ControllerCommandInterface {
-
-			public boolean execute(BaseController controller) {
-				String selectedImageName = controller.getSelectedImageName();
-				try {
-					controller.getModel().deleteImage(controller.getCurrentStoreName(),
-						selectedImageName);
-				}
-				catch(PersistenceMechanismException e) {
-					Alert alert = new Alert("Error",
-						"The mobile database can not delete this photo", null, AlertType.ERROR);
-					Display.getDisplay(controller.getMidlet()).setCurrent(alert,
-						Display.getDisplay(controller.getMidlet()).getCurrent());
-					return true;
-				}
-				catch(ImageNotFoundException e) {
-					Alert alert = new Alert("Error",
-						"The selected photo was not found in the mobile device", null,
-						AlertType.ERROR);
-					Display.getDisplay(controller.getMidlet()).setCurrent(alert,
-						Display.getDisplay(controller.getMidlet()).getCurrent());
-					return true;
-				}
-				controller.showImageList(controller.getCurrentStoreName());
-				controller.setCurrentScreenName(Constants.IMAGELIST_SCREEN);
-				return true;
-			}
-		}
-	}
-
-	adds {
-		package lancs.mobilemedia.core.ui.controller;
-
-		import lancs.mobilemedia.core.ui.controller.BaseController;
-		import lancs.mobilemedia.core.ui.controller.ControllerCommandInterface;
-
-		public class DestroyApp implements ControllerCommandInterface {
-
-			public boolean execute(BaseController controller) {
-				controller.getMidlet().destroyApp(true);
-				return true;
-			}
-		}
-	}
-
-	adds {
-		package lancs.mobilemedia.core.ui.controller;
-
-		import javax.microedition.lcdui.Alert;
-		import javax.microedition.lcdui.AlertType;
-		import javax.microedition.lcdui.Display;
-
-		import lancs.mobilemedia.core.ui.datamodel.ImageData;
-		import lancs.mobilemedia.core.ui.screens.NewLabelScreen;
-		import lancs.mobilemedia.lib.exceptions.ImageNotFoundException;
-		import lancs.mobilemedia.lib.exceptions.NullAlbumDataReference;
-
-		public class EditPhotoLabel implements ControllerCommandInterface {
-
-			public boolean execute(BaseController controller) {
-				String selectedImageName = controller.getSelectedImageName();
-				try {
-					ImageData image = controller.getModel().getImageInfo(selectedImageName);
-					PhotoController photoController = new PhotoController(image, controller);
-					NewLabelScreen formScreen = new NewLabelScreen("Edit Label Photo",
-						NewLabelScreen.LABEL_PHOTO);
-					formScreen.setCommandListener(photoController);
-					photoController.setScreen(formScreen);
-					controller.setCurrentScreen(formScreen);
-					formScreen = null;
-				}
-				catch(ImageNotFoundException e) {
-					Alert alert = new Alert("Error",
-						"The selected photo was not found in the mobile device", null,
-						AlertType.ERROR);
-					Display.getDisplay(controller.getMidlet()).setCurrent(alert,
-						Display.getDisplay(controller.getMidlet()).getCurrent());
-				}
-				catch(NullAlbumDataReference e) {
-					controller.createNewAlbumData();
-					Alert alert = new Alert("Error",
-						"The operation is not available. Try again later !", null,
-						AlertType.ERROR);
-					Display.getDisplay(controller.getMidlet()).setCurrent(alert,
-						Display.getDisplay(controller.getMidlet()).getCurrent());
-				}
-				return true;
-			}
-		}
-	}
-
-	adds {
-		package lancs.mobilemedia.core.ui.controller;
-
-		public class GoToPreviousScreen implements ControllerCommandInterface {
-
-			public boolean execute(BaseController controller) {
-				controller.goToPreviousScreen();
-				return true;
-			}
-		}
-	}
-
-	adds {
-		package lancs.mobilemedia.core.ui.controller;
-
-		import lancs.mobilemedia.core.ui.screens.NewLabelScreen;
-		import lancs.mobilemedia.core.util.Constants;
-
-		public class NewAlbum implements ControllerCommandInterface {
-
-			public boolean execute(BaseController controller) {
-
-				System.out.println("Create new Photo Album here");
-				controller.setCurrentScreenName(Constants.NEWALBUM_SCREEN);
-				NewLabelScreen canv = new NewLabelScreen("Add new Photo Album", NewLabelScreen.NEW_ALBUM);
-				canv.setCommandListener(controller);
-				controller.setCurrentScreen(canv);
-				canv = null;
-				return true;
-			}
-		}
-	}
-
-	adds {
-		package lancs.mobilemedia.core.ui.controller;
-
-		import lancs.mobilemedia.core.util.Constants;
-
-		public class ResetAlbum implements ControllerCommandInterface {
-
-			public boolean execute(BaseController controller) {
-				System.out.println("<* BaseController.handleCommand() *> Reset Photo Album");
-				controller.resetImageData();
-				controller.setCurrentScreenName(Constants.ALBUMLIST_SCREEN);
-				return true;
-			}
-		}
-	}
-
-	adds {
-		package lancs.mobilemedia.core.ui.controller;
-
-		import javax.microedition.lcdui.Command;
-		import javax.microedition.lcdui.CommandListener;
-		import javax.microedition.lcdui.Displayable;
-
-		import lancs.mobilemedia.core.ui.datamodel.ImageData;
-		import lancs.mobilemedia.core.ui.screens.NewLabelScreen;
-		import lancs.mobilemedia.core.util.Constants;
-
-		public class PhotoController implements CommandListener {
-
-			private BaseController nextController;
-			private ImageData image;
-			private NewLabelScreen screen;
-
-			public PhotoController(ImageData image, BaseController nextController) {
-				this.image = image;
-				this.nextController = nextController;
+			public PhotoViewController(MainUIMidlet midlet, AlbumData albumData,
+				AlbumListScreen albumListScreen, String imageName) {
+				super(midlet, albumData, albumListScreen);
+				this.imageName = imageName;
 			}
 
-			public boolean handleCommand(Command c, Displayable d) {
+			public void initCommandsMap() {
+				commands = new HashMap();
+			}
+
+			public String getImageName() {
+				return imageName;
+			}
+
+			public boolean handleCommand(Command c) {
+
 				String label = c.getLabel();
+				System.out.println("<* PhotoViewController.handleCommand() *> " + label);
 
-				if(label.equals("Save")) {
-				//System.out.println("PhotoController.handleCommand() :: Save Photo Label = " + this.screen.getLabelName());
-					this.getImage().setImageLabel(this.screen.getLabelName());
-					this.nextController.updateImage(image);
-					goToPreviousScreen();
-					return true;
+				command = ( ControllerCommandInterface ) commands.get(label);
+
+				if(command != null) {
+					return command.execute(this);
 				}
-				else if(label.equals("Cancel")) {
-					goToPreviousScreen();
-					return true;
-				}
-				return true;
-			}
-
-			public void commandAction(Command c, Displayable d) {
-				handleCommand(c, d);
-			}
-
-			private void goToPreviousScreen() {
-			//System.out.println("<* PhotoController.goToPreviousScreen() *>");
-				this.nextController.showImageList(null); //[TODO JP fix] removing argument false
-				this.nextController.setCurrentScreenName(Constants.IMAGELIST_SCREEN);
-			}
-
-			public void setImage(ImageData image) {
-				this.image = image;
-			}
-
-			public ImageData getImage() {
-				return image;
-			}
-
-			public void setScreen(NewLabelScreen screen) {
-				this.screen = screen;
-			}
-
-			public NewLabelScreen getScreen() {
-				return screen;
-			}
-		}
-	}
-
-	adds {
-		package lancs.mobilemedia.core.ui.controller;
-
-		import javax.microedition.lcdui.Alert;
-		import javax.microedition.lcdui.AlertType;
-		import javax.microedition.lcdui.Display;
-		import javax.microedition.rms.RecordStoreFullException;
-
-		import lancs.mobilemedia.core.ui.screens.AddPhotoToAlbum;
-		import lancs.mobilemedia.lib.exceptions.InvalidImageDataException;
-		import lancs.mobilemedia.lib.exceptions.ImagePathNotValidException;
-		import lancs.mobilemedia.lib.exceptions.PersistenceMechanismException;
-
-		public class SaveAddedPhoto implements ControllerCommandInterface {
-
-			public boolean execute(BaseController controller) {
-				try {
-					controller.getModel().addNewPhotoToAlbum((( AddPhotoToAlbum )
-							controller.getCurrentScreenName()).getPhotoName(),(( AddPhotoToAlbum )
-							controller.getCurrentScreenName()).getPath(),
-						controller.getCurrentStoreName());
-				}
-				catch(InvalidImageDataException e) {
-					Alert alert = null;
-					if(e instanceof ImagePathNotValidException) alert = new Alert("Error",
-						"The path is not valid", null, AlertType.ERROR);
-					else alert = new Alert("Error", "The image file format is not valid",
-						null, AlertType.ERROR);
-					Display.getDisplay(controller.getMidlet()).setCurrent(alert,
-						Display.getDisplay(controller.getMidlet()).getCurrent());
-					return true;
-				}
-				catch(PersistenceMechanismException e) {
-					Alert alert = null;
-					if(e.getCause() instanceof RecordStoreFullException) alert = new
-					Alert("Error", "The mobile database is full", null, AlertType.ERROR);
-					else alert = new Alert("Error",
-						"The mobile database can not add a new photo", null, AlertType.ERROR);
-					Display.getDisplay(controller.getMidlet()).setCurrent(alert,
-						Display.getDisplay(controller.getMidlet()).getCurrent());
-				}
-				GoToPreviousScreen previousScreen = new GoToPreviousScreen();
-				return previousScreen.execute(controller);
+				return false;
 			}
 		}
 	}
@@ -762,13 +865,13 @@ delta cBase {
 
 		public class SaveAlbum implements ControllerCommandInterface {
 
-			public boolean execute(BaseController controller) {
+			public boolean execute(AbstractController controller) {
 				try {
-					if(controller.getCurrentScreenName() instanceof NewLabelScreen) {
+					if(controller.getCurrentScreen() instanceof NewLabelScreen) {
 						NewLabelScreen currentScreen = ( NewLabelScreen )
-						controller.getCurrentScreenName();
+						controller.getCurrentScreen();
 						if(currentScreen.getFormType() == NewLabelScreen.NEW_ALBUM)
-						controller.getModel().createNewPhotoAlbum(currentScreen.getLabelName());
+						controller.getAlbumData().createNewPhotoAlbum(currentScreen.getLabelName());
 						else if(currentScreen.getFormType() == NewLabelScreen.LABEL_PHOTO) {
 
 						}
@@ -802,17 +905,109 @@ delta cBase {
 	adds {
 		package lancs.mobilemedia.core.ui.controller;
 
+		import javax.microedition.lcdui.Alert;
+		import javax.microedition.lcdui.AlertType;
+		import javax.microedition.lcdui.Display;
+		import javax.microedition.rms.RecordStoreFullException;
+
+		import lancs.mobilemedia.core.ui.screens.AddPhotoToAlbum;
+		import lancs.mobilemedia.lib.exceptions.InvalidImageDataException;
+		import lancs.mobilemedia.lib.exceptions.ImagePathNotValidException;
+		import lancs.mobilemedia.lib.exceptions.PersistenceMechanismException;
+
+		public class SavePhoto implements ControllerCommandInterface {
+
+			public boolean execute(AbstractController controller) {
+				try {
+					controller.getAlbumData().addNewPhotoToAlbum(((AddPhotoToAlbum) controller.getCurrentScreen()).getPhotoName(),
+							((AddPhotoToAlbum) controller.getCurrentScreen()).getPath(), controller.getCurrentStoreName());
+				} catch (InvalidImageDataException e) {
+					Alert alert = null;
+					if (e instanceof ImagePathNotValidException)
+						alert = new Alert("Error", "The path is not valid", null, AlertType.ERROR);
+					else
+						alert = new Alert("Error", "The image file format is not valid", null, AlertType.ERROR);
+					Display.getDisplay(controller.getMidlet()).setCurrent(alert, Display.getDisplay(controller.getMidlet()).getCurrent());
+					return true;
+				} catch (PersistenceMechanismException e) {
+					Alert alert = null;
+					if (e.getCause() instanceof RecordStoreFullException)
+						alert = new Alert("Error", "The mobile database is full", null, AlertType.ERROR);
+					else
+						alert = new Alert("Error", "The mobile database can not add a new photo", null, AlertType.ERROR);
+					Display.getDisplay(controller.getMidlet()).setCurrent(alert, Display.getDisplay(controller.getMidlet()).getCurrent());
+				}
+				return ((PhotoController) controller).goToPreviousScreen();
+			}
+		}
+	}
+
+	adds {
+		package lancs.mobilemedia.core.ui.controller;
+
+		public class SavePhotoLabel implements ControllerCommandInterface {
+
+	        public boolean execute(AbstractController controller) {
+                System.out.println("<* PhotoController.handleCommand() *> Save Photo Label = " + ((PhotoController) controller).getScreen().getLabelName());
+                ((PhotoController) controller).getImage().setImageLabel(((PhotoController) controller).getScreen().getLabelName());
+                ((PhotoController) controller).updateImage(((PhotoController) controller).getImage());
+                return ((PhotoController) controller).goToPreviousScreen();
+    	    }
+		}
+	}
+
+	adds {
+		package lancs.mobilemedia.core.ui.controller;
+
+		public class ScreenSingleton {
+
+			private static ScreenSingleton instance;
+			private String currentScreenName;
+			private String currentStoreName = "My Photo Album";
+
+			private ScreenSingleton() {
+			}
+
+			public static ScreenSingleton getInstance() {
+				if(instance == null) instance = new ScreenSingleton();
+				return instance;
+			}
+
+			public void setCurrentScreenName(String currentScreenName) {
+				this.currentScreenName = currentScreenName;
+			}
+
+			public String getCurrentScreenName() {
+				return currentScreenName;
+			}
+
+			public void setCurrentStoreName(String currentStoreName) {
+				this.currentStoreName = currentStoreName;
+			}
+
+			public String getCurrentStoreName() {
+				return currentStoreName;
+			}
+		}
+	}
+
+	adds {
+		package lancs.mobilemedia.core.ui.controller;
+
+		import javax.microedition.lcdui.Display;
 		import javax.microedition.lcdui.List;
 
 		import lancs.mobilemedia.core.util.Constants;
 
 		public class SelectAlbum implements ControllerCommandInterface {
 
-			public boolean execute(BaseController controller) {
-				List down = ( List ) controller.getDisplay().getCurrent();
-				controller.setCurrentStoreName(down.getString(down.getSelectedIndex()));
-				controller.showImageList(controller.getCurrentStoreName());
-				controller.setCurrentScreenName(Constants.IMAGELIST_SCREEN);
+			public boolean execute(AbstractController controller) {
+				List down = ( List )
+				Display.getDisplay(controller.getMidlet()).getCurrent();
+				ScreenSingleton.getInstance().setCurrentStoreName(down.getString(down.getSelectedIndex()));((
+					PhotoListController )
+					controller).showImageList(controller.getCurrentStoreName());
+				ScreenSingleton.getInstance().setCurrentScreenName(Constants.IMAGELIST_SCREEN);
 				return true;
 			}
 		}
@@ -825,9 +1020,9 @@ delta cBase {
 
 		public class ViewPhoto implements ControllerCommandInterface {
 
-			public boolean execute(BaseController controller) {
-				controller.showImage(controller.getSelectedImageName());
-				controller.setCurrentScreenName(Constants.IMAGE_SCREEN);
+			public boolean execute(AbstractController controller) {
+				((PhotoController) controller).showImage( ((PhotoController) controller).getSelectedImageName() );
+				ScreenSingleton.getInstance().setCurrentScreenName(Constants.IMAGE_SCREEN);
 				return true;
 			}
 		}
@@ -1048,7 +1243,6 @@ delta cBase {
 
 							RecordStore.deleteRecordStore(storeName);
 							RecordStore.deleteRecordStore(infoStoreName);
-
 						}
 						catch(RecordStoreException e) {
 							System.out.println("No record store named " + storeName + " to delete.");
@@ -1369,8 +1563,16 @@ delta cBase {
 				return labeltxt.getString();
 			}
 
+			public void setPhotoName(String photoName) {
+				labeltxt.setString(photoName);
+			}
+
 			public String getPath() {
 				return photopathtxt.getString();
+			}
+
+			public void setLabePhotoPath(String label) {
+				photopathtxt.setLabel(label);
 			}
 		}
 	}
@@ -1536,7 +1738,7 @@ delta cBase {
 
 			public PhotoViewScreen(Image img) {
 				image = img;
-				this.addCommand(backCommand);
+				initMenu();
 			}
 
 			public PhotoViewScreen(AlbumData mod, String name) {
@@ -1555,6 +1757,10 @@ delta cBase {
 							null, AlertType.ERROR);
 					alert.setTimeout(5000);
 				}
+				initMenu();
+			}
+
+			protected void initMenu() {
 				this.addCommand(backCommand);
 			}
 
@@ -1653,7 +1859,8 @@ delta cBase {
 					throw new InvalidImageFormatException("The file " + imageFile + " does not have PNG format");
 				}
 				catch(NullPointerException e2) {
-					throw new ImagePathNotValidException("Path not valid for this image:" + imageFile);
+					throw new ImagePathNotValidException("Path not valid for this image:" +
+						imageFile);
 				}
 				return bArray;
 			}
