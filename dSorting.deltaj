@@ -1,0 +1,175 @@
+delta dSorting {
+
+//package lancs.mobilemedia.core.ui.controller
+
+	modifies lancs.mobilemedia.core.ui.controller.BaseController {
+
+	//adds import lancs.mobilemedia.core.ui.controller.commands.SortByViews;
+		adds import lancs.mobilemedia.core.ui.controller.SortByViews;
+
+		adds public static final int SHOW_IMAGE_LIST_SORTING_MODE = 2;
+
+		modifies initCommandsMap() {
+			original();
+			commands.put("Sort by Views", new SortByViews());
+		}
+
+		adds private void exchange(ImageData [] images, int pos1, int pos2) {
+			ImageData tmp = images[pos1];
+			images[pos1] = images[pos2];
+			images[pos2] = tmp;
+		}
+
+		adds public void bubbleSort(ImageData [] images) {
+		//System.out.print("Sorting by BubbleSort...");
+			for (int end = images.length; end > 1; end--) {
+				for (int current = 0; current < end - 1; 	current ++) {
+					if (images[current].getNumberOfViews() > images[current + 1].getNumberOfViews()) {
+						exchange(images, current, current + 1);
+					}
+				}
+			}
+			//System.out.println("done.");
+		}
+
+		modifies fillImageList(PhotoListScreen imageList, ImageData [] images, int
+			imageListMode) {
+
+			if(imageListMode == SHOW_IMAGE_LIST_SORTING_MODE) {
+				bubbleSort(images);
+			}
+
+			original(imageList, images, SHOW_IMAGE_LIST_DEFAULT_MODE);
+		}
+	}
+
+	//package lancs.mobilemedia.core.ui.controller.commands
+	//package lancs.mobilemedia.core.ui.controller
+
+	adds {
+	//	package lancs.mobilemedia.core.ui.controller.commands;
+		package lancs.mobilemedia.core.ui.controller;
+
+		import lancs.mobilemedia.core.util.Constants;
+		import lancs.mobilemedia.core.ui.controller.BaseController;
+		import lancs.mobilemedia.core.ui.controller.ControllerCommandInterface;
+
+		public class SortByViews implements ControllerCommandInterface {
+
+			public boolean execute(BaseController controller) {
+				controller.showImageList(controller.getCurrentStoreName(),
+					BaseController.SHOW_IMAGE_LIST_SORTING_MODE);
+				controller.setCurrentScreenName(Constants.IMAGELIST_SCREEN);
+				return true;
+			}
+		}
+	}
+
+	modifies lancs.mobilemedia.core.ui.controller.ViewPhoto {
+
+		adds import javax.microedition.lcdui.Alert;
+		adds import javax.microedition.lcdui.AlertType;
+		adds import javax.microedition.lcdui.Display;
+
+		adds import lancs.mobilemedia.core.ui.datamodel.ImageData;
+		adds import lancs.mobilemedia.lib.exceptions.ImageNotFoundException;
+		adds import lancs.mobilemedia.lib.exceptions.NullAlbumDataReference;
+
+		adds protected void increasePhotoNumberOfViews(BaseController controller,
+			String selectedImageName) {
+
+			try {
+				ImageData image = controller.getModel().getImageInfo(selectedImageName);
+				image.increaseNumberOfViews();
+				controller.updateImage(image);
+				System.out.println("<* BaseController.handleCommand() *> Image = " +
+					selectedImageName + "; # views = " + image.getNumberOfViews());
+			}
+			catch(ImageNotFoundException e) {
+				Alert alert = new Alert("Error",
+					"The selected photo was not found in the mobile device", null,
+					AlertType.ERROR);
+				Display.getDisplay(controller.getMidlet()).setCurrent(alert,
+					Display.getDisplay(controller.getMidlet()).getCurrent());
+			}
+			catch(NullAlbumDataReference e) {
+				controller.createNewAlbumData();
+				Alert alert = new Alert("Error",
+					"The operation is not available. Try again later !", null,
+					AlertType.ERROR);
+				Display.getDisplay(controller.getMidlet()).setCurrent(alert,
+					Display.getDisplay(controller.getMidlet()).getCurrent());
+			}
+		}
+
+		modifies execute(BaseController controller) {
+			increasePhotoNumberOfViews(controller, controller.getSelectedImageName());
+			return original(controller);
+		}
+	}
+
+	//package lancs.mobilemedia.core.ui.datamodel
+
+	modifies lancs.mobilemedia.core.ui.datamodel.ImageData {
+
+		adds private int numberOfViews = 0;
+
+		adds public int getNumberOfViews() {
+			return numberOfViews;
+		}
+
+		adds public void setNumberOfViews(int views) {
+			this.numberOfViews = views;
+		}
+
+		adds public void increaseNumberOfViews() {
+			this.numberOfViews ++;
+		}
+	}
+
+	//package lancs.mobilemedia.core.ui.screens
+
+	modifies lancs.mobilemedia.core.ui.screens.PhotoListScreen {
+
+		adds public static final Command sortCommand = new Command("Sort by Views",
+			Command.ITEM, 1);
+
+		modifies initMenu() {
+			original();
+			this.addCommand(sortCommand);
+		}
+	}
+
+	//package lancs.mobilemedia.core.util
+
+	modifies lancs.mobilemedia.core.util.ImageUtil {
+		adds protected void setImageNumberOfViews(ImageData ii, String iiString,
+				int startIndex, int endIndex, String delimiter) {
+
+			startIndex = endIndex + 1;
+			endIndex = iiString.indexOf(delimiter, startIndex);
+
+			if(endIndex == - 1) endIndex = iiString.length();
+
+			int numberOfViews = 0;
+			try {
+				numberOfViews = Integer.parseInt(iiString.substring(startIndex, endIndex));
+			}
+			catch(RuntimeException e) {
+				numberOfViews = 0;
+				e.printStackTrace();
+			}
+
+			ii.setNumberOfViews(numberOfViews);
+		}
+
+		modifies retrieveImageByteString(ImageData ii) {
+
+			String byteString = original(ii);
+			byteString = byteString.concat(DELIMITER);
+			byteString = byteString.concat("" + ii.getNumberOfViews());
+
+			return byteString;
+		}
+	}
+}
